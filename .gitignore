@@ -1,7 +1,7 @@
 .venv/
 __pycache__/
 *.pyc
-data/raw/
 out/
+data/
 *.db
 .env
