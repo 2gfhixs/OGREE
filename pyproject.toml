@@ -16,12 +16,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = [
-  "pytest",
-]
-
-[tool.setuptools]
-package-dir = {"" = "."}
+dev = ["pytest"]
 
 [tool.setuptools.packages.find]
 where = ["."]
