@@ -5,3 +5,10 @@ out/
 data/
 *.db
 .env
+
+# local artifacts
+.venv/
+.pytest_cache/
+*.egg-info/
+__pycache__/
+*.pyc
