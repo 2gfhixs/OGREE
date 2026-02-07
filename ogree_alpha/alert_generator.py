@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ogree_alpha.entity_resolution import resolve_company
+
 from datetime import datetime, timezone
 from typing import Any, Dict
 
@@ -69,7 +71,7 @@ def build_alert(row: Dict[str, Any], utc_date: str) -> Dict[str, Any]:
         "event_type": "chain_progression",
         "event_time": last_event_time,
         "ingest_time": _now_utc(),
-        "company_id": None,
+        "company_id": row.get("company_id"),
         "asset_id": None,
         "canonical_doc_id": canonical_doc_id,
         "evidence_pointer": evidence_pointer,
@@ -87,6 +89,10 @@ def generate_and_insert_alerts(hours: int = 72, top_n: int = 25) -> int:
     utc_date = _now_utc().date().isoformat()
     inserted = 0
     for r in rows:
+        # Phase 8: resolve company identity from chain score fields
+        operator = r.get('operator')
+        resolved = resolve_company(operator=operator)
+        company_id = resolved.company_id
         tier = tier_for_score(float(r["score"]))
         if not tier:
             continue
