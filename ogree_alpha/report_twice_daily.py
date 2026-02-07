@@ -74,8 +74,8 @@ def render_report(hours: int = 24, top_n: int = 10) -> Dict[str, Any]:
     # Alerts section
     alerts = load_recent_alerts(hours=hours)
     if not alerts:
-        alerts_text = "No alerts in the last window.\n"
-        alerts_html = "<p><em>No alerts in the last window.</em></p>"
+        alerts_text = "No new alerts in the last window.\n"
+        alerts_html = "<p><em>No new alerts in the last window.</em></p>"
     else:
         # Group by tier, and dedupe by (tier, summary)
         grouped: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
