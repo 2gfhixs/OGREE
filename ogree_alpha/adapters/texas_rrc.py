@@ -31,6 +31,15 @@ def _parse_dt(value: Any) -> datetime | None:
 
 
 def _normalize_lineage_id(payload: Mapping[str, Any]) -> str | None:
+    # Texas: prefer API number if present; else permit_no
+    api = payload.get("api")
+    if isinstance(api, str) and api.strip():
+        return api.strip()
+    permit_no = payload.get("permit_no")
+    if isinstance(permit_no, str) and permit_no.strip():
+        return f"permit:{permit_no.strip()}"
+    return None
+
 
 def _canonicalize_payload(payload: Mapping[str, Any]) -> Dict[str, Any]:
     p = dict(payload) if isinstance(payload, dict) else {}
@@ -48,15 +57,6 @@ def _canonicalize_payload(payload: Mapping[str, Any]) -> Dict[str, Any]:
         p["permit_id"] = p.get("permit_no")
     return p
 
-    # Texas: prefer API number if present; else permit_no
-    api = payload.get("api")
-    if isinstance(api, str) and api.strip():
-        return api.strip()
-    permit_no = payload.get("permit_no")
-    if isinstance(permit_no, str) and permit_no.strip():
-        return f"permit:{permit_no.strip()}"
-    return None
-
 
 def iter_fixture_events(path: str = "sample_data/texas/rrc_raw_events.jsonl") -> Iterable[Dict[str, Any]]:
     p = Path(path)
@@ -72,7 +72,9 @@ def iter_fixture_events(path: str = "sample_data/texas/rrc_raw_events.jsonl") ->
 
 def ingest_fixture_to_db(path: str = "sample_data/texas/rrc_raw_events.jsonl") -> int:
     inserted = 0
+    processed = 0
     for obj in iter_fixture_events(path):
+        processed += 1
         payload = obj.get("payload_json") or {}
         if not isinstance(payload, dict):
             payload = {}
@@ -96,4 +98,4 @@ def ingest_fixture_to_db(path: str = "sample_data/texas/rrc_raw_events.jsonl") -
         }
         did_insert, _id = insert_raw_event(raw_event)
         inserted += 1 if did_insert else 0
-    return inserted
+    return inserted, processed
