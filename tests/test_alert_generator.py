@@ -50,8 +50,8 @@ def test_generate_and_insert_alerts_idempotent(monkeypatch):
             "permit_id": "Px",
             "last_event_time": datetime(2026, 2, 7, 0, 0, tzinfo=timezone.utc),
         }]
-
     import ogree_alpha.alert_generator as ag
+    monkeypatch.setattr(ag, "resolve_company", lambda operator=None, **kw: type("R", (), {"company_id": "COMPANY_X"})())
     monkeypatch.setattr(ag, "load_recent_events", _fake_load_recent_events)
     monkeypatch.setattr(ag, "compute_chain_scores", _fake_compute_chain_scores)
 

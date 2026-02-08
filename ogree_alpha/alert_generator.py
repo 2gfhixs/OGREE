@@ -30,7 +30,7 @@ def tier_for_score(score: float) -> str:
     return ""
 
 
-def build_alert(row: Dict[str, Any], utc_date: str) -> Dict[str, Any]:
+def build_alert(row: Dict[str, Any], utc_date: str, company_id: str | None = None) -> Dict[str, Any]:
     lineage_id = row["lineage_id"]
     tier = tier_for_score(float(row["score"]))
     last_event_time = row.get("last_event_time")  # datetime (for DB column)
@@ -71,7 +71,7 @@ def build_alert(row: Dict[str, Any], utc_date: str) -> Dict[str, Any]:
         "event_type": "chain_progression",
         "event_time": last_event_time,
         "ingest_time": _now_utc(),
-        "company_id": row.get("company_id"),
+        "company_id": company_id,
         "asset_id": None,
         "canonical_doc_id": canonical_doc_id,
         "evidence_pointer": evidence_pointer,
@@ -96,7 +96,7 @@ def generate_and_insert_alerts(hours: int = 72, top_n: int = 25) -> int:
         tier = tier_for_score(float(r["score"]))
         if not tier:
             continue
-        alert = build_alert(r, utc_date=utc_date)
+        alert = build_alert(r, utc_date=utc_date, company_id=company_id)
         did_insert = insert_alert(alert)
         inserted += 1 if did_insert else 0
     return inserted
