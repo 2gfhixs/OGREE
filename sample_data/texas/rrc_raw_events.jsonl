@@ -1,0 +1,2 @@
+{"source_system":"tx_rrc","source_event_id":"txp_001","event_time":"2026-02-07T02:00:00Z","payload_json":{"type":"permit_filed","region":"Texas","api":"0000000001","operator":"Placeholder Co","permit_no":"12345","field":"Demo Field"}}
+{"source_system":"tx_rrc","source_event_id":"txc_001","event_time":"2026-02-07T06:00:00Z","payload_json":{"type":"completion_reported","region":"Texas","api":"0000000001","operator":"Placeholder Co","status":"completed","notes":"demo completion"}}
