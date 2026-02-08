@@ -84,7 +84,7 @@ def compute_chain_scores(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         # baseline AK-ish semantics
         if t == "permit_filed":
             b["has_permit"] = True
-        elif t == "well_record":
+        elif t in ("well_record", "completion_reported"):
             b["has_well"] = True
 
         # Phase 9C: TX semantics (treat several TX event types as permit/well evidence)
