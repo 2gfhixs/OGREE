@@ -31,6 +31,23 @@ def _parse_dt(value: Any) -> datetime | None:
 
 
 def _normalize_lineage_id(payload: Mapping[str, Any]) -> str | None:
+
+def _canonicalize_payload(payload: Mapping[str, Any]) -> Dict[str, Any]:
+    p = dict(payload) if isinstance(payload, dict) else {}
+    # ensure stable keys
+    if "region" not in p or not p.get("region"):
+        p["region"] = "Texas"
+    if "type" in p and isinstance(p["type"], str):
+        p["type"] = p["type"].strip()
+    operator = p.get("operator")
+    if operator is not None and isinstance(operator, str):
+        operator = operator.strip()
+        p["operator"] = operator if operator else None
+    # carry permit_id for cross-adapter consistency
+    if "permit_no" in p and "permit_id" not in p:
+        p["permit_id"] = p.get("permit_no")
+    return p
+
     # Texas: prefer API number if present; else permit_no
     api = payload.get("api")
     if isinstance(api, str) and api.strip():
@@ -60,9 +77,9 @@ def ingest_fixture_to_db(path: str = "sample_data/texas/rrc_raw_events.jsonl") -
         if not isinstance(payload, dict):
             payload = {}
 
+        payload = _canonicalize_payload(payload)
         lineage_id = _normalize_lineage_id(payload)
         if lineage_id:
-            payload = dict(payload)
             payload["lineage_id"] = lineage_id
 
         event_time = _parse_dt(obj.get("event_time"))
