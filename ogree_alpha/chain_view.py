@@ -10,7 +10,6 @@ from sqlalchemy import select
 from ogree_alpha.db.models import EventLog
 from ogree_alpha.db.session import get_session
 
-
 def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -40,6 +39,8 @@ def load_recent_events(hours: int = 72) -> List[Dict[str, Any]]:
                 }
             )
     return rows
+TX_PERMIT_TYPES = {"permit_filed", "permit_issued", "drilling_permit"}
+TX_WELL_TYPES = {"completion_reported", "well_completion", "drill_result", "well_record"}
 
 
 def compute_chain_scores(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -78,10 +79,21 @@ def compute_chain_scores(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         b["permit_id"] = b["permit_id"] or pj.get("permit_id")
 
         t = pj.get("type")
+        region = (pj.get("region") or "").strip()
+
+        # baseline AK-ish semantics
         if t == "permit_filed":
             b["has_permit"] = True
         elif t == "well_record":
             b["has_well"] = True
+
+        # Phase 9C: TX semantics (treat several TX event types as permit/well evidence)
+        if region.lower() == "texas":
+            if t in TX_PERMIT_TYPES:
+                b["has_permit"] = True
+            if t in TX_WELL_TYPES:
+                b["has_well"] = True
+
 
     rows_out: List[Dict[str, Any]] = []
     for lineage_id, b in buckets.items():
