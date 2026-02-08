@@ -63,7 +63,7 @@ def _escape_html(s: str) -> str:
 
 def render_report(hours: int = 24, top_n: int = 10) -> Dict[str, Any]:
     today = _now_utc().date().isoformat()
-    subject = f"OGREE Alpha — Top Alerts (AK) — {today}"
+    subject = f"OGREE Alpha — Top Alerts — {today}"
 
     # Phase 7: Opportunities section
     opps = rank_opportunities(hours=max(hours, 24), top_n=top_n)

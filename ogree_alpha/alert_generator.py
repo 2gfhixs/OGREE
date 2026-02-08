@@ -56,7 +56,7 @@ def build_alert(row: Dict[str, Any], utc_date: str, company_id: str | None = Non
     }
 
     summary = (
-        f"[{tier.upper()}] AK chain progression "
+        f"[{tier.upper()}] chain progression "
         f"{row.get('permit_id') or lineage_id} ({row.get('operator')}, {row.get('region')}) "
         f"score={score_summary['score']}"
     )
