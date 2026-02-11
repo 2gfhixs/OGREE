@@ -70,7 +70,7 @@ def iter_fixture_events(path: str = "sample_data/texas/rrc_raw_events.jsonl") ->
         yield obj
 
 
-def ingest_fixture_to_db(path: str = "sample_data/texas/rrc_raw_events.jsonl") -> int:
+def ingest_fixture_to_db(path: str = "sample_data/texas/rrc_raw_events.jsonl") -> tuple[int, int]:
     inserted = 0
     processed = 0
     for obj in iter_fixture_events(path):
@@ -94,7 +94,7 @@ def ingest_fixture_to_db(path: str = "sample_data/texas/rrc_raw_events.jsonl") -
             "ingest_time": _now_utc(),
             "payload_json": payload,
             "content_hash": sha256_hex(json.dumps(payload, sort_keys=True, default=str)),
-            "canonical_doc_id": f"{SOURCE_SYSTEM}:{sha256_hex(f'{obj.get('source_event_id')}|{payload.get('type')}')[:16]}",
+            "canonical_doc_id": f"{SOURCE_SYSTEM}:{sha256_hex(str(obj.get('source_event_id')) + '|' + str(payload.get('type')))[:16]}",
         }
         did_insert, _id = insert_raw_event(raw_event)
         inserted += 1 if did_insert else 0

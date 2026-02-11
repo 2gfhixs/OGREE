@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import json
 import os
+from typing import Optional
 
 import typer
 from sqlalchemy import text
 
 from ogree_alpha.db.session import get_session
 
-app = typer.Typer(add_completion=False)
+app = typer.Typer(add_completion=False, help="OGREE Exploration Alpha — CLI")
 
 
 @app.command("db-check")
@@ -24,5 +26,116 @@ def db_check() -> None:
         typer.echo(str(version))
 
 
-if __name__ == "__main__":
-    app()
+@app.command("ingest-demo")
+def ingest_demo(
+    path: str = typer.Option("sample_data/raw_events.jsonl", help="Path to demo JSONL"),
+) -> None:
+    """Run the demo pipeline: ingest sample events and generate alerts."""
+    from ogree_alpha.demo_pipeline import ingest_and_alert
+
+    out = ingest_and_alert(path)
+    typer.echo(f"Processed {len(out)} events")
+    inserted_raw = sum(1 for o in out if o["raw_event"]["inserted"])
+    inserted_alerts = sum(1 for o in out if o["alert"]["inserted"])
+    typer.echo(f"  raw events inserted: {inserted_raw}")
+    typer.echo(f"  alerts inserted:     {inserted_alerts}")
+
+
+@app.command("ingest-ak")
+def ingest_ak() -> None:
+    """Ingest Alaska permits + wells into event_log."""
+    from ogree_alpha.adapters.alaska_permits import ingest_zip_fixture_to_db as ingest_permits
+    from ogree_alpha.adapters.alaska_wells import ingest_zip_fixture_to_db as ingest_wells
+
+    n_permits = ingest_permits()
+    typer.echo(f"AK permits: {n_permits} new events inserted")
+
+    n_wells = ingest_wells()
+    typer.echo(f"AK wells:   {n_wells} new events inserted")
+
+
+@app.command("ingest-tx")
+def ingest_tx(
+    path: str = typer.Option(
+        "sample_data/texas/rrc_raw_events.jsonl",
+        help="Path to TX RRC fixture JSONL",
+    ),
+) -> None:
+    """Ingest Texas RRC fixture events into event_log."""
+    from ogree_alpha.adapters.texas_rrc import ingest_fixture_to_db
+
+    inserted, processed = ingest_fixture_to_db(path)
+    typer.echo(f"TX RRC: processed {processed}, inserted {inserted} new events")
+
+
+@app.command("generate-alerts")
+def generate_alerts(
+    hours: int = typer.Option(72, help="Lookback window in hours"),
+    top_n: int = typer.Option(25, help="Max alerts to generate"),
+) -> None:
+    """Score recent events and generate alerts."""
+    from ogree_alpha.alert_generator import generate_and_insert_alerts
+
+    n = generate_and_insert_alerts(hours=hours, top_n=top_n)
+    typer.echo(f"Alerts: {n} new alerts inserted")
+
+
+@app.command("report")
+def report(
+    hours: int = typer.Option(24, help="Lookback window in hours"),
+    top_n: int = typer.Option(10, help="Max items per section"),
+    output: Optional[str] = typer.Option(None, help="Write report JSON to file"),
+) -> None:
+    """Generate a twice-daily report (text + HTML)."""
+    from ogree_alpha.report_twice_daily import render_report
+
+    result = render_report(hours=hours, top_n=top_n)
+    if output:
+        with open(output, "w", encoding="utf-8") as f:
+            json.dump(result, f, default=str, indent=2)
+        typer.echo(f"Report written to {output}")
+    else:
+        typer.echo(f"Subject: {result['subject']}")
+        typer.echo("")
+        typer.echo(result["text"])
+
+
+@app.command("opportunities")
+def opportunities(
+    hours: int = typer.Option(24, help="Lookback window in hours"),
+    top_n: int = typer.Option(15, help="Max opportunities"),
+) -> None:
+    """Rank and display top opportunities."""
+    from ogree_alpha.opportunity_ranker import rank_opportunities, render_text
+
+    opps = rank_opportunities(hours=hours, top_n=top_n)
+    typer.echo(render_text(opps))
+
+
+@app.command("run-all")
+def run_all(
+    hours: int = typer.Option(72, help="Event lookback window in hours"),
+    report_hours: int = typer.Option(24, help="Report lookback window in hours"),
+    top_n: int = typer.Option(25, help="Max alerts"),
+    report_file: Optional[str] = typer.Option(None, help="Write report to file"),
+) -> None:
+    """Run full pipeline: ingest all sources -> generate alerts -> report."""
+    typer.echo("=== Ingest: Demo ===")
+    ingest_demo(path="sample_data/raw_events.jsonl")
+
+    typer.echo("\n=== Ingest: Alaska ===")
+    ingest_ak()
+
+    typer.echo("\n=== Ingest: Texas ===")
+    ingest_tx(path="sample_data/texas/rrc_raw_events.jsonl")
+
+    typer.echo("\n=== Generate Alerts ===")
+    generate_alerts(hours=hours, top_n=top_n)
+
+    typer.echo("\n=== Report ===")
+    report(hours=report_hours, top_n=10, output=report_file)
+
+    typer.echo("\n=== Top Opportunities ===")
+    opportunities(hours=report_hours, top_n=15)
+
+    typer.echo("\nDone.")

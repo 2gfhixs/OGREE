@@ -6,6 +6,28 @@ import pytest
 
 from ogree_alpha.alert_generator import build_alert, tier_for_score, generate_and_insert_alerts
 
+def test_build_alert_propagates_company_id():
+    """Phase 8.1: resolved company_id must appear in alert payload."""
+    row = {
+        "lineage_id": "L_PROP",
+        "score": 1.0,
+        "has_permit": True,
+        "has_well": True,
+        "operator": "Some Operator",
+        "region": "AK",
+        "permit_id": "P_PROP",
+        "last_event_time": datetime(2026, 2, 7, 0, 0, tzinfo=timezone.utc),
+    }
+    # With explicit company_id
+    alert_with = build_alert(row, utc_date="2026-02-07", company_id="RESOLVED_CO")
+    assert alert_with["company_id"] == "RESOLVED_CO"
+
+    # Without company_id (None)
+    alert_without = build_alert(row, utc_date="2026-02-07", company_id=None)
+    assert alert_without["company_id"] is None
+
+    # IDs must still be stable regardless of company_id
+    assert alert_with["alert_id"] == alert_without["alert_id"]
 
 def test_tier_thresholds():
     assert tier_for_score(1.0) == "high"
