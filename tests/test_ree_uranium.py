@@ -181,8 +181,15 @@ def test_ree_chain_scoring():
     events = load_recent_events(hours=9999)
     rows = compute_chain_scores(events)
 
-    # Ucore REE should have claims + drill + resource + deal = high score
-    ucore_rows = [r for r in rows if r.get("company") == "Ucore Rare Metals Inc."]
+    # Ucore REE project lineage should have claims + drill + resource + deal = high score.
+    # There may be additional Ucore rows from SEC/company-level activity, so scope to REE project rows.
+    ucore_rows = [
+        r
+        for r in rows
+        if r.get("company") == "Ucore Rare Metals Inc."
+        and str(r.get("commodity") or "").lower() == "ree"
+        and r.get("project") == "Bokan-Dotson Ridge"
+    ]
     assert len(ucore_rows) == 1
     ur = ucore_rows[0]
     assert ur["has_claims"] is True
