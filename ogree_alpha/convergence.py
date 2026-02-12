@@ -188,10 +188,15 @@ def apply_convergence(
     for row in rows:
         row_mut = dict(row)
         keys = _row_keys(row_mut)
-        anchor = _coerce_utc(row_mut.get("last_event_time"))
-        if anchor is None:
-            candidate_times = [latest_by_key.get(k) for k in keys if latest_by_key.get(k) is not None]
-            anchor = max(candidate_times) if candidate_times else None
+        row_anchor = _coerce_utc(row_mut.get("last_event_time"))
+        candidate_times = [latest_by_key.get(k) for k in keys if latest_by_key.get(k) is not None]
+        if candidate_times:
+            if row_anchor is not None:
+                anchor = max([row_anchor, *candidate_times])
+            else:
+                anchor = max(candidate_times)
+        else:
+            anchor = row_anchor
 
         if anchor is None:
             row_mut["convergence_score"] = 0
