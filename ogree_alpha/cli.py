@@ -68,6 +68,20 @@ def ingest_tx(
     typer.echo(f"TX RRC: processed {processed}, inserted {inserted} new events")
 
 
+@app.command("ingest-ree")
+def ingest_ree(
+    path: str = typer.Option(
+        "sample_data/ree_uranium/events.jsonl",
+        help="Path to REE/Uranium fixture JSONL",
+    ),
+) -> None:
+    """Ingest REE + Uranium fixture events into event_log."""
+    from ogree_alpha.adapters.ree_uranium import ingest_fixture_to_db
+
+    inserted, processed = ingest_fixture_to_db(path)
+    typer.echo(f"REE/U: processed {processed}, inserted {inserted} new events")
+
+
 @app.command("generate-alerts")
 def generate_alerts(
     hours: int = typer.Option(72, help="Lookback window in hours"),
@@ -128,6 +142,9 @@ def run_all(
 
     typer.echo("\n=== Ingest: Texas ===")
     ingest_tx(path="sample_data/texas/rrc_raw_events.jsonl")
+
+    typer.echo("\n=== Ingest: REE/Uranium ===")
+    ingest_ree(path="sample_data/ree_uranium/events.jsonl")
 
     typer.echo("\n=== Generate Alerts ===")
     generate_alerts(hours=hours, top_n=top_n)

@@ -44,6 +44,14 @@ TX_SPUD_TYPES = {"spud_reported"}
 TX_WELL_TYPES = {"completion_reported", "well_completion", "drill_result", "well_record"}
 TX_PRODUCTION_TYPES = {"production_reported"}
 
+# REE/U lifecycle stages
+REE_U_CLAIMS_TYPES = {"claims_staked", "exploration_permit"}
+REE_U_DRILL_TYPES = {"drill_assay"}
+REE_U_RESOURCE_TYPES = {"resource_estimate"}
+REE_U_STUDY_TYPES = {"pea_published", "pfs_published", "feasibility_study"}
+REE_U_DEAL_TYPES = {"financing_closed", "financing_announced", "offtake_agreement"}
+REE_U_POLICY_TYPES = {"policy_designation"}
+
 
 def compute_chain_scores(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
@@ -58,12 +66,22 @@ def compute_chain_scores(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         "has_spud": False,
         "has_well": False,
         "has_production": False,
+        "has_claims": False,
+        "has_drill_assay": False,
+        "has_resource": False,
+        "has_study": False,
+        "has_deal": False,
+        "has_policy": False,
         "operator": None,
         "region": None,
         "permit_id": None,
         "field": None,
         "county": None,
         "ip_boed": None,
+        "commodity": None,
+        "company": None,
+        "project": None,
+        "tickers": None,
         "last_event_time": None,
     })
 
@@ -116,29 +134,73 @@ def compute_chain_scores(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             if t in TX_PRODUCTION_TYPES:
                 b["has_production"] = True
 
+        # Phase 10: REE/U lifecycle
+        commodity = (pj.get("commodity") or "").strip().lower()
+        if commodity in ("ree", "uranium"):
+            b["commodity"] = b["commodity"] or pj.get("commodity")
+            b["company"] = b["company"] or pj.get("company")
+            b["project"] = b["project"] or pj.get("project")
+            if not b["tickers"] and pj.get("tickers"):
+                b["tickers"] = pj.get("tickers")
+            if t in REE_U_CLAIMS_TYPES:
+                b["has_claims"] = True
+                b["has_permit"] = True  # also counts as permit-level for unified scoring
+            if t in REE_U_DRILL_TYPES:
+                b["has_drill_assay"] = True
+                b["has_well"] = True  # maps to well-level in unified scoring
+            if t in REE_U_RESOURCE_TYPES:
+                b["has_resource"] = True
+            if t in REE_U_STUDY_TYPES:
+                b["has_study"] = True
+            if t in REE_U_DEAL_TYPES:
+                b["has_deal"] = True
+            if t in REE_U_POLICY_TYPES:
+                b["has_policy"] = True
+
 
     rows_out: List[Dict[str, Any]] = []
     for lineage_id, b in buckets.items():
+        # Base score: O&G 4-stage chain
         score = (
             (0.3 if b["has_permit"] else 0.0)
             + (0.2 if b["has_spud"] else 0.0)
             + (0.3 if b["has_well"] else 0.0)
             + (0.2 if b["has_production"] else 0.0)
         )
+        # REE/U bonus stages (additive — can push score above 1.0 for convergence)
+        if b["has_resource"]:
+            score += 0.15
+        if b["has_study"]:
+            score += 0.2
+        if b["has_deal"]:
+            score += 0.15
+        if b["has_policy"]:
+            score += 0.1
+
         rows_out.append(
             {
                 "lineage_id": lineage_id,
-                "score": score,
+                "score": round(score, 4),
                 "has_permit": bool(b["has_permit"]),
                 "has_spud": bool(b["has_spud"]),
                 "has_well": bool(b["has_well"]),
                 "has_production": bool(b["has_production"]),
+                "has_claims": bool(b["has_claims"]),
+                "has_drill_assay": bool(b["has_drill_assay"]),
+                "has_resource": bool(b["has_resource"]),
+                "has_study": bool(b["has_study"]),
+                "has_deal": bool(b["has_deal"]),
+                "has_policy": bool(b["has_policy"]),
                 "operator": b["operator"],
                 "region": b["region"],
                 "permit_id": b["permit_id"],
                 "field": b["field"],
                 "county": b["county"],
                 "ip_boed": b["ip_boed"],
+                "commodity": b["commodity"],
+                "company": b["company"],
+                "project": b["project"],
+                "tickers": b["tickers"],
                 "last_event_time": b["last_event_time"],
             }
         )

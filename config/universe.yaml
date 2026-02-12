@@ -1,6 +1,6 @@
-# OGREE Exploration Alpha - initial universe (edit freely)
+# OGREE Exploration Alpha - universe (Track A)
 
-version: 1
+version: 2
 
 assets:
   - asset_id: "AK_GAS_PLAY_1"
@@ -13,26 +13,107 @@ assets:
     region: "Texas"
     notes: "placeholder"
 
-  - asset_id: "REE_JUNIOR_1"
+  - asset_id: "RED_MOUNTAIN_REE"
     kind: "rare_earths"
-    region: "USA"
-    notes: "placeholder"
+    region: "British Columbia"
+    commodity: "REE"
+    notes: "Frontier Rare Earths - Red Mountain project"
 
-  - asset_id: "URANIUM_JUNIOR_1"
+  - asset_id: "CROW_BUTTE_SOUTH_U"
     kind: "uranium"
-    region: "USA"
-    notes: "placeholder"
+    region: "Nebraska"
+    commodity: "uranium"
+    notes: "Basin Uranium - Crow Butte South ISR project"
+
+  - asset_id: "WICHEEDA_REE"
+    kind: "rare_earths"
+    region: "British Columbia"
+    commodity: "REE"
+    notes: "Pacific Critical Minerals - Wicheeda project"
 
 companies:
   - company_id: "COMPANY_1"
     name: "Placeholder Co"
     tickers:
       - "TICK"
+    aliases:
+      - "Placeholder Co"
     assets:
       - "AK_GAS_PLAY_1"
     notes: "replace with real companies"
+
+  - company_id: "PERMIAN_BASIN_RES"
+    name: "Permian Basin Resources Inc"
+    tickers:
+      - "PBR"
+    aliases:
+      - "Permian Basin Resources"
+      - "Permian Basin Resources Inc"
+    assets:
+      - "TX_GAS_PLAY_1"
+
+  - company_id: "EAGLE_FORD_ENERGY"
+    name: "Eagle Ford Energy LLC"
+    tickers:
+      - "EFE"
+    aliases:
+      - "Eagle Ford Energy"
+      - "Eagle Ford Energy LLC"
+
+  - company_id: "HAYNESVILLE_GAS"
+    name: "Haynesville Gas Partners"
+    tickers:
+      - "HGP"
+    aliases:
+      - "Haynesville Gas Partners"
+
+  - company_id: "WEST_TX_EXPL"
+    name: "West Texas Exploration"
+    tickers:
+      - "WTX"
+    aliases:
+      - "West Texas Exploration"
+
+  - company_id: "FRONTIER_REE"
+    name: "Frontier Rare Earths Ltd"
+    tickers:
+      - "FRE.V"
+      - "FREFF"
+    aliases:
+      - "Frontier Rare Earths"
+      - "Frontier Rare Earths Ltd"
+    assets:
+      - "RED_MOUNTAIN_REE"
+
+  - company_id: "BASIN_URANIUM"
+    name: "Basin Uranium Corp"
+    tickers:
+      - "BU.V"
+    aliases:
+      - "Basin Uranium"
+      - "Basin Uranium Corp"
+    assets:
+      - "CROW_BUTTE_SOUTH_U"
+
+  - company_id: "PACIFIC_CRITICAL"
+    name: "Pacific Critical Minerals Inc"
+    tickers:
+      - "PCM.TO"
+      - "PCMLF"
+    aliases:
+      - "Pacific Critical Minerals"
+      - "Pacific Critical Minerals Inc"
+    assets:
+      - "WICHEEDA_REE"
 
 watchlists:
   - name: "default"
     companies:
       - "COMPANY_1"
+      - "PERMIAN_BASIN_RES"
+      - "EAGLE_FORD_ENERGY"
+      - "HAYNESVILLE_GAS"
+      - "WEST_TX_EXPL"
+      - "FRONTIER_REE"
+      - "BASIN_URANIUM"
+      - "PACIFIC_CRITICAL"
