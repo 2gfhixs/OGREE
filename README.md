@@ -8,6 +8,7 @@ See `SPEC.md` for the full system specification.
 
 - `docs/DEMO_REPORT_SAMPLE.md` - sample report artifact for team demos
 - `docs/OGREE_TOOL_SUMMARY.md` - current feature/architecture summary
+- `docs/MILESTONES_NEXT_STEPS.md` - milestone roadmap and immediate next steps
 
 
 ## Smoke test
