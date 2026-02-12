@@ -12,6 +12,26 @@ from ogree_alpha.db.session import get_session
 app = typer.Typer(add_completion=False, help="OGREE Exploration Alpha — CLI")
 
 
+def _validate_sec_live_safety_params(
+    *,
+    max_filings_per_company: int,
+    timeout_s: int,
+    request_delay_s: float,
+    max_retries: int,
+    backoff_base_s: float,
+) -> None:
+    if max_filings_per_company < 1 or max_filings_per_company > 500:
+        raise typer.BadParameter("max_filings_per_company must be between 1 and 500")
+    if timeout_s < 1 or timeout_s > 300:
+        raise typer.BadParameter("timeout_s must be between 1 and 300 seconds")
+    if request_delay_s < 0.0 or request_delay_s > 10.0:
+        raise typer.BadParameter("request_delay_s must be between 0.0 and 10.0 seconds")
+    if max_retries < 0 or max_retries > 10:
+        raise typer.BadParameter("max_retries must be between 0 and 10")
+    if backoff_base_s < 0.0 or backoff_base_s > 120.0:
+        raise typer.BadParameter("backoff_base_s must be between 0.0 and 120.0 seconds")
+
+
 @app.command("db-check")
 def db_check() -> None:
     """Check DB connectivity and print basic info."""
@@ -110,6 +130,14 @@ def ingest_sec_live(
     universe_path: str = typer.Option("config/universe.yaml", help="Path to universe YAML"),
 ) -> None:
     """Ingest recent SEC EDGAR filings from SEC submissions endpoints."""
+    _validate_sec_live_safety_params(
+        max_filings_per_company=max_filings_per_company,
+        timeout_s=timeout_s,
+        request_delay_s=request_delay_s,
+        max_retries=max_retries,
+        backoff_base_s=backoff_base_s,
+    )
+
     from ogree_alpha.adapters.sec_edgar import ingest_live_to_db_with_stats
 
     inserted, processed, stats = ingest_live_to_db_with_stats(
@@ -232,6 +260,14 @@ def run_all(
 ) -> None:
     """Run full pipeline: ingest fixture sources (+optional live SEC) -> alerts -> report."""
     sec_live_enabled = sec_live if isinstance(sec_live, bool) else bool(getattr(sec_live, "default", False))
+    if sec_live_enabled:
+        _validate_sec_live_safety_params(
+            max_filings_per_company=sec_live_max_filings_per_company,
+            timeout_s=sec_live_timeout_s,
+            request_delay_s=sec_live_request_delay_s,
+            max_retries=sec_live_max_retries,
+            backoff_base_s=sec_live_backoff_base_s,
+        )
 
     typer.echo("=== Ingest: Demo ===")
     ingest_demo(path="sample_data/raw_events.jsonl")

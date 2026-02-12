@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import pytest
+import typer
+
 from ogree_alpha import cli
 
 
@@ -65,3 +68,37 @@ def test_run_all_calls_live_sec_when_enabled(monkeypatch):
     assert kwargs["max_retries"] == 5
     assert kwargs["backoff_base_s"] == 1.25
     assert kwargs["universe_path"] == "config/universe.yaml"
+
+
+def test_ingest_sec_live_rejects_invalid_knobs():
+    with pytest.raises(typer.BadParameter) as exc_info:
+        cli.ingest_sec_live(
+            max_filings_per_company=20,
+            user_agent="UA",
+            timeout_s=20,
+            request_delay_s=-0.1,
+            max_retries=3,
+            backoff_base_s=1.0,
+            universe_path="config/universe.yaml",
+        )
+    assert "request_delay_s" in str(exc_info.value)
+
+
+def test_run_all_rejects_invalid_sec_live_params_before_ingest(monkeypatch):
+    monkeypatch.setattr(cli, "ingest_demo", lambda **kwargs: (_ for _ in ()).throw(AssertionError("should not run")))
+    with pytest.raises(typer.BadParameter) as exc_info:
+        cli.run_all(
+            hours=48,
+            report_hours=12,
+            top_n=9,
+            report_file=None,
+            sec_live=True,
+            sec_live_max_filings_per_company=7,
+            sec_live_user_agent="OGREE Test (test@example.com)",
+            sec_live_timeout_s=33,
+            sec_live_request_delay_s=0.2,
+            sec_live_max_retries=-1,
+            sec_live_backoff_base_s=1.25,
+            sec_live_universe_path="config/universe.yaml",
+        )
+    assert "max_retries" in str(exc_info.value)

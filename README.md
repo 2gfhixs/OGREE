@@ -58,6 +58,13 @@ You can tune SEC request safety knobs when needed:
 DATABASE_URL="postgresql://ogree:ogree@localhost:5432/ogree" python -m ogree_alpha ingest-sec-live --request-delay-s 0.25 --max-retries 4 --backoff-base-s 1.5 --user-agent "OGREE/0.1 (you@example.com)"
 ```
 
+Validation guardrails:
+- `max-filings-per-company`: 1..500
+- `timeout-s`: 1..300
+- `request-delay-s`: 0.0..10.0
+- `max-retries`: 0..10
+- `backoff-base-s`: 0.0..120.0
+
 - Full pipeline with optional live SEC in one command:
 
 ```bash
