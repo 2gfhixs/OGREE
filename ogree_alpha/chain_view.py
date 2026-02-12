@@ -40,7 +40,9 @@ def load_recent_events(hours: int = 72) -> List[Dict[str, Any]]:
             )
     return rows
 TX_PERMIT_TYPES = {"permit_filed", "permit_issued", "drilling_permit"}
+TX_SPUD_TYPES = {"spud_reported"}
 TX_WELL_TYPES = {"completion_reported", "well_completion", "drill_result", "well_record"}
+TX_PRODUCTION_TYPES = {"production_reported"}
 
 
 def compute_chain_scores(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -53,10 +55,15 @@ def compute_chain_scores(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     buckets: Dict[str, Dict[str, Any]] = defaultdict(lambda: {
         "has_permit": False,
+        "has_spud": False,
         "has_well": False,
+        "has_production": False,
         "operator": None,
         "region": None,
         "permit_id": None,
+        "field": None,
+        "county": None,
+        "ip_boed": None,
         "last_event_time": None,
     })
 
@@ -77,6 +84,17 @@ def compute_chain_scores(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         b["operator"] = b["operator"] or pj.get("operator")
         b["region"] = b["region"] or pj.get("region")
         b["permit_id"] = b["permit_id"] or pj.get("permit_id")
+        b["field"] = b["field"] or pj.get("field")
+        b["county"] = b["county"] or pj.get("county")
+        # carry best IP rate seen
+        ip = pj.get("ip_boed")
+        if ip is not None:
+            try:
+                ip_f = float(ip)
+                if b["ip_boed"] is None or ip_f > b["ip_boed"]:
+                    b["ip_boed"] = ip_f
+            except (ValueError, TypeError):
+                pass
 
         t = pj.get("type")
         region = (pj.get("region") or "").strip()
@@ -87,26 +105,40 @@ def compute_chain_scores(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         elif t in ("well_record", "completion_reported"):
             b["has_well"] = True
 
-        # Phase 9C: TX semantics (treat several TX event types as permit/well evidence)
+        # Phase 9: TX semantics (richer event type coverage)
         if region.lower() == "texas":
             if t in TX_PERMIT_TYPES:
                 b["has_permit"] = True
+            if t in TX_SPUD_TYPES:
+                b["has_spud"] = True
             if t in TX_WELL_TYPES:
                 b["has_well"] = True
+            if t in TX_PRODUCTION_TYPES:
+                b["has_production"] = True
 
 
     rows_out: List[Dict[str, Any]] = []
     for lineage_id, b in buckets.items():
-        score = (0.4 if b["has_permit"] else 0.0) + (0.6 if b["has_well"] else 0.0)
+        score = (
+            (0.3 if b["has_permit"] else 0.0)
+            + (0.2 if b["has_spud"] else 0.0)
+            + (0.3 if b["has_well"] else 0.0)
+            + (0.2 if b["has_production"] else 0.0)
+        )
         rows_out.append(
             {
                 "lineage_id": lineage_id,
                 "score": score,
                 "has_permit": bool(b["has_permit"]),
+                "has_spud": bool(b["has_spud"]),
                 "has_well": bool(b["has_well"]),
+                "has_production": bool(b["has_production"]),
                 "operator": b["operator"],
                 "region": b["region"],
                 "permit_id": b["permit_id"],
+                "field": b["field"],
+                "county": b["county"],
+                "ip_boed": b["ip_boed"],
                 "last_event_time": b["last_event_time"],
             }
         )

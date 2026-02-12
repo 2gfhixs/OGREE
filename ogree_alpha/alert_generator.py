@@ -21,11 +21,11 @@ def _dt_to_iso(value: Any) -> Any:
 
 
 def tier_for_score(score: float) -> str:
-    if score >= 1.0:
+    if score >= 0.8:
         return "high"
-    if score >= 0.6:
+    if score >= 0.5:
         return "medium"
-    if score >= 0.4:
+    if score >= 0.3:
         return "low"
     return ""
 
@@ -52,7 +52,9 @@ def build_alert(row: Dict[str, Any], utc_date: str, company_id: str | None = Non
     score_summary = {
         "score": float(row["score"]),
         "has_permit": bool(row.get("has_permit")),
+        "has_spud": bool(row.get("has_spud")),
         "has_well": bool(row.get("has_well")),
+        "has_production": bool(row.get("has_production")),
     }
 
     summary = (

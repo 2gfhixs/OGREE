@@ -31,9 +31,10 @@ def test_build_alert_propagates_company_id():
 
 def test_tier_thresholds():
     assert tier_for_score(1.0) == "high"
-    assert tier_for_score(0.6) == "medium"
-    assert tier_for_score(0.4) == "low"
-    assert tier_for_score(0.39) == ""
+    assert tier_for_score(0.8) == "high"
+    assert tier_for_score(0.5) == "medium"
+    assert tier_for_score(0.3) == "low"
+    assert tier_for_score(0.29) == ""
 
 
 def test_build_alert_stable_id():
