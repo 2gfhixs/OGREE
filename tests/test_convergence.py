@@ -47,7 +47,7 @@ def test_apply_convergence_respects_window():
 
 def test_chain_scores_include_company_level_cross_source_convergence():
     t0 = datetime(2026, 2, 1, 0, 0, tzinfo=timezone.utc)
-    company = "Permian Basin Resources Inc"
+    company = "Permian Resources Corporation"
     events = [
         # TX lineage carries A + B
         _evt(t0, lineage_id="TX:42-301-00001", event_type="permit_filed", operator=company),
@@ -55,10 +55,10 @@ def test_chain_scores_include_company_level_cross_source_convergence():
         # Cross-source company signals carry D + E + F
         _evt(
             t0 + timedelta(days=2),
-            lineage_id="SEC:PERMIAN_BASIN_RES",
+            lineage_id="SEC:PERMIAN_RESOURCES",
             event_type="insider_buy",
             company=company,
-            company_id="PERMIAN_BASIN_RES",
+            company_id="PERMIAN_RESOURCES",
             filer_name="Dana Morgan",
         ),
         _evt(
@@ -66,7 +66,7 @@ def test_chain_scores_include_company_level_cross_source_convergence():
             lineage_id="MD:financing",
             event_type="financing_closed",
             company=company,
-            company_id="PERMIAN_BASIN_RES",
+            company_id="PERMIAN_RESOURCES",
         ),
         _evt(
             t0 + timedelta(days=4),

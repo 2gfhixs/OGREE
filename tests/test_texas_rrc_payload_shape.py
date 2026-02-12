@@ -19,7 +19,7 @@ from ogree_alpha.adapters.texas_rrc import (
 # --- Normalization unit tests (no DB required) ---
 
 def test_clean_str_strips_and_collapses():
-    assert _clean_str("  West Texas  Exploration  ") == "West Texas Exploration"
+    assert _clean_str("  Ring  Energy,  Inc.  ") == "Ring Energy, Inc."
     assert _clean_str("") is None
     assert _clean_str(None) is None
     assert _clean_str("   ") is None
@@ -67,8 +67,8 @@ def test_canonicalize_payload_sets_region():
 
 
 def test_canonicalize_payload_cleans_operator():
-    p = _canonicalize_payload({"type": "permit_filed", "operator": "  West Texas  Exploration  "})
-    assert p["operator"] == "West Texas Exploration"
+    p = _canonicalize_payload({"type": "permit_filed", "operator": "  Ring  Energy,  Inc.  "})
+    assert p["operator"] == "Ring Energy, Inc."
 
     p2 = _canonicalize_payload({"type": "permit_filed", "operator": ""})
     assert p2["operator"] is None

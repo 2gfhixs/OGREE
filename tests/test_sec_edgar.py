@@ -41,8 +41,8 @@ def test_normalize_transaction_type_fallbacks():
 
 
 def test_derive_lineage_prefers_company_id():
-    payload = {"company_id": "PERMIAN_BASIN_RES", "company": "Permian Basin Resources Inc"}
-    assert _derive_lineage_id(payload) == "SEC:PERMIAN_BASIN_RES"
+    payload = {"company_id": "PERMIAN_RESOURCES", "company": "Permian Resources Corporation"}
+    assert _derive_lineage_id(payload) == "SEC:PERMIAN_RESOURCES"
 
 
 def test_canonicalize_payload_resolves_company_and_computes_total():
@@ -51,17 +51,17 @@ def test_canonicalize_payload_resolves_company_and_computes_total():
             "type": "insider_buy",
             "filer_name": "Dana Morgan",
             "relationship": "Chief Financial Officer",
-            "company": "Permian Basin Resources Inc",
+            "company": "Permian Resources Corporation",
             "tickers": "",
             "shares": 60000,
             "price_per_share": 2.1,
         }
     )
-    assert payload["company_id"] == "PERMIAN_BASIN_RES"
-    assert payload["lineage_id"] == "SEC:PERMIAN_BASIN_RES"
+    assert payload["company_id"] == "PERMIAN_RESOURCES"
+    assert payload["lineage_id"] == "SEC:PERMIAN_RESOURCES"
     assert payload["transaction_type"] == "purchase"
     assert payload["total_value"] == 126000.0
-    assert payload["tickers"] == ["PBR"]
+    assert payload["tickers"] == ["PR"]
 
 
 def test_parse_dt_formats():
@@ -92,8 +92,8 @@ def test_chain_scoring_adds_insider_buy_bonus_and_cluster_bonus():
     events = [
         {
             "payload_json": {
-                "lineage_id": "SEC:PERMIAN_BASIN_RES",
-                "company": "Permian Basin Resources Inc",
+                "lineage_id": "SEC:PERMIAN_RESOURCES",
+                "company": "Permian Resources Corporation",
                 "type": "insider_buy",
                 "filer_name": "Dana Morgan",
             },
@@ -102,8 +102,8 @@ def test_chain_scoring_adds_insider_buy_bonus_and_cluster_bonus():
         },
         {
             "payload_json": {
-                "lineage_id": "SEC:PERMIAN_BASIN_RES",
-                "company": "Permian Basin Resources Inc",
+                "lineage_id": "SEC:PERMIAN_RESOURCES",
+                "company": "Permian Resources Corporation",
                 "type": "insider_buy",
                 "filer_name": "Ryan Cole",
             },
@@ -124,8 +124,8 @@ def test_chain_scoring_cluster_requires_distinct_insiders():
     events = [
         {
             "payload_json": {
-                "lineage_id": "SEC:EAGLE_FORD_ENERGY",
-                "company": "Eagle Ford Energy LLC",
+                "lineage_id": "SEC:MAGNOLIA_OIL_GAS",
+                "company": "Magnolia Oil & Gas Corporation",
                 "type": "insider_buy",
                 "filer_name": "Sarah Patel",
             },
@@ -134,8 +134,8 @@ def test_chain_scoring_cluster_requires_distinct_insiders():
         },
         {
             "payload_json": {
-                "lineage_id": "SEC:EAGLE_FORD_ENERGY",
-                "company": "Eagle Ford Energy LLC",
+                "lineage_id": "SEC:MAGNOLIA_OIL_GAS",
+                "company": "Magnolia Oil & Gas Corporation",
                 "type": "insider_buy",
                 "filer_name": "Sarah Patel",
             },

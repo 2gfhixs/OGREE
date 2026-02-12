@@ -1,119 +1,155 @@
-# OGREE Exploration Alpha - universe (Track A)
+# OGREE Exploration Alpha - real-company universe (Track A)
 
-version: 2
+version: 3
 
 assets:
-  - asset_id: "AK_GAS_PLAY_1"
+  - asset_id: "AK_AHPUN_THETA_WEST"
     kind: "onshore_gas"
     region: "Alaska"
-    notes: "placeholder"
+    notes: "Pantheon Resources North Slope program (Ahpun + Theta West)"
 
-  - asset_id: "TX_GAS_PLAY_1"
+  - asset_id: "TX_DELAWARE_BASIN"
     kind: "onshore_gas"
     region: "Texas"
-    notes: "placeholder"
+    notes: "Permian Resources Delaware Basin development inventory"
 
-  - asset_id: "RED_MOUNTAIN_REE"
+  - asset_id: "TX_EAGLE_FORD"
+    kind: "onshore_gas"
+    region: "Texas"
+    notes: "Magnolia Oil & Gas Karnes/Giddings position"
+
+  - asset_id: "TX_HAYNESVILLE"
+    kind: "onshore_gas"
+    region: "Texas/Louisiana"
+    notes: "Comstock Resources Haynesville dry-gas focus area"
+
+  - asset_id: "TX_CENTRAL_BASIN_PLATFORM"
+    kind: "onshore_gas"
+    region: "Texas"
+    notes: "Ring Energy Central Basin Platform operations"
+
+  - asset_id: "BOKAN_DOTSON_RIDGE_REE"
     kind: "rare_earths"
-    region: "British Columbia"
+    region: "Alaska"
     commodity: "REE"
-    notes: "Frontier Rare Earths - Red Mountain project"
-
-  - asset_id: "CROW_BUTTE_SOUTH_U"
-    kind: "uranium"
-    region: "Nebraska"
-    commodity: "uranium"
-    notes: "Basin Uranium - Crow Butte South ISR project"
+    notes: "Ucore Rare Metals Bokan-Dotson Ridge project"
 
   - asset_id: "WICHEEDA_REE"
     kind: "rare_earths"
     region: "British Columbia"
     commodity: "REE"
-    notes: "Pacific Critical Minerals - Wicheeda project"
+    notes: "Defense Metals Wicheeda project"
+
+  - asset_id: "LOST_CREEK_ISR"
+    kind: "uranium"
+    region: "Wyoming"
+    commodity: "uranium"
+    notes: "Ur-Energy Lost Creek ISR operation and expansion corridor"
 
 companies:
-  - company_id: "COMPANY_1"
-    name: "Placeholder Co"
+  - company_id: "PANTHEON_RESOURCES"
+    name: "Pantheon Resources plc"
     tickers:
-      - "TICK"
+      - "PANR.L"
+      - "PTHRF"
     aliases:
-      - "Placeholder Co"
+      - "Pantheon Resources"
+      - "Pantheon Resources plc"
+      - "Pantheon"
     assets:
-      - "AK_GAS_PLAY_1"
-    notes: "replace with real companies"
+      - "AK_AHPUN_THETA_WEST"
 
-  - company_id: "PERMIAN_BASIN_RES"
-    name: "Permian Basin Resources Inc"
+  - company_id: "PERMIAN_RESOURCES"
+    name: "Permian Resources Corporation"
     tickers:
-      - "PBR"
+      - "PR"
     aliases:
-      - "Permian Basin Resources"
-      - "Permian Basin Resources Inc"
+      - "Permian Resources"
+      - "Permian Resources Corp"
+      - "Permian Resources Corporation"
     assets:
-      - "TX_GAS_PLAY_1"
+      - "TX_DELAWARE_BASIN"
 
-  - company_id: "EAGLE_FORD_ENERGY"
-    name: "Eagle Ford Energy LLC"
+  - company_id: "MAGNOLIA_OIL_GAS"
+    name: "Magnolia Oil & Gas Corporation"
     tickers:
-      - "EFE"
+      - "MGY"
     aliases:
-      - "Eagle Ford Energy"
-      - "Eagle Ford Energy LLC"
-
-  - company_id: "HAYNESVILLE_GAS"
-    name: "Haynesville Gas Partners"
-    tickers:
-      - "HGP"
-    aliases:
-      - "Haynesville Gas Partners"
-
-  - company_id: "WEST_TX_EXPL"
-    name: "West Texas Exploration"
-    tickers:
-      - "WTX"
-    aliases:
-      - "West Texas Exploration"
-
-  - company_id: "FRONTIER_REE"
-    name: "Frontier Rare Earths Ltd"
-    tickers:
-      - "FRE.V"
-      - "FREFF"
-    aliases:
-      - "Frontier Rare Earths"
-      - "Frontier Rare Earths Ltd"
+      - "Magnolia Oil & Gas"
+      - "Magnolia Oil and Gas"
+      - "Magnolia Oil & Gas Corporation"
+      - "Magnolia"
     assets:
-      - "RED_MOUNTAIN_REE"
+      - "TX_EAGLE_FORD"
 
-  - company_id: "BASIN_URANIUM"
-    name: "Basin Uranium Corp"
+  - company_id: "COMSTOCK_RESOURCES"
+    name: "Comstock Resources, Inc."
     tickers:
-      - "BU.V"
+      - "CRK"
     aliases:
-      - "Basin Uranium"
-      - "Basin Uranium Corp"
+      - "Comstock Resources"
+      - "Comstock Resources Inc"
+      - "Comstock Resources, Inc."
     assets:
-      - "CROW_BUTTE_SOUTH_U"
+      - "TX_HAYNESVILLE"
 
-  - company_id: "PACIFIC_CRITICAL"
-    name: "Pacific Critical Minerals Inc"
+  - company_id: "RING_ENERGY"
+    name: "Ring Energy, Inc."
     tickers:
-      - "PCM.TO"
-      - "PCMLF"
+      - "REI"
     aliases:
-      - "Pacific Critical Minerals"
-      - "Pacific Critical Minerals Inc"
+      - "Ring Energy"
+      - "Ring Energy Inc"
+      - "Ring Energy, Inc."
+    assets:
+      - "TX_CENTRAL_BASIN_PLATFORM"
+
+  - company_id: "UCORE_RARE_METALS"
+    name: "Ucore Rare Metals Inc."
+    tickers:
+      - "UCU.V"
+      - "UURAF"
+    aliases:
+      - "Ucore Rare Metals"
+      - "Ucore Rare Metals Inc"
+      - "Ucore Rare Metals Inc."
+      - "Ucore"
+    assets:
+      - "BOKAN_DOTSON_RIDGE_REE"
+
+  - company_id: "DEFENSE_METALS"
+    name: "Defense Metals Corp."
+    tickers:
+      - "DEFN.V"
+      - "DFMTF"
+    aliases:
+      - "Defense Metals"
+      - "Defense Metals Corp"
+      - "Defense Metals Corp."
     assets:
       - "WICHEEDA_REE"
+
+  - company_id: "UR_ENERGY"
+    name: "Ur-Energy Inc."
+    tickers:
+      - "URG"
+      - "URE.TO"
+    aliases:
+      - "Ur-Energy"
+      - "Ur-Energy Inc"
+      - "Ur-Energy Inc."
+      - "Ur Energy"
+    assets:
+      - "LOST_CREEK_ISR"
 
 watchlists:
   - name: "default"
     companies:
-      - "COMPANY_1"
-      - "PERMIAN_BASIN_RES"
-      - "EAGLE_FORD_ENERGY"
-      - "HAYNESVILLE_GAS"
-      - "WEST_TX_EXPL"
-      - "FRONTIER_REE"
-      - "BASIN_URANIUM"
-      - "PACIFIC_CRITICAL"
+      - "PANTHEON_RESOURCES"
+      - "PERMIAN_RESOURCES"
+      - "MAGNOLIA_OIL_GAS"
+      - "COMSTOCK_RESOURCES"
+      - "RING_ENERGY"
+      - "UCORE_RARE_METALS"
+      - "DEFENSE_METALS"
+      - "UR_ENERGY"

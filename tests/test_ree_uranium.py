@@ -36,7 +36,7 @@ def test_normalize_type():
 
 
 def test_derive_lineage_id_project_based():
-    payload = {"company": "Frontier Rare Earths Ltd", "project": "Red Mountain"}
+    payload = {"company": "Ucore Rare Metals Inc.", "project": "Bokan-Dotson Ridge"}
     lid = _derive_lineage_id(payload)
     assert lid is not None and len(lid) == 20
 
@@ -45,7 +45,7 @@ def test_derive_lineage_id_project_based():
     assert lid == lid2
 
     # Different project = different lineage
-    payload2 = {"company": "Frontier Rare Earths Ltd", "project": "Other Project"}
+    payload2 = {"company": "Ucore Rare Metals Inc.", "project": "Other Project"}
     lid3 = _derive_lineage_id(payload2)
     assert lid3 != lid
 
@@ -62,11 +62,11 @@ def test_derive_lineage_id_none_when_empty():
 
 
 def test_canonicalize_payload_normalizes_tickers():
-    p = _canonicalize_payload({"type": "drill_assay", "tickers": ["FRE.V", "FREFF"]})
-    assert p["tickers"] == ["FRE.V", "FREFF"]
+    p = _canonicalize_payload({"type": "drill_assay", "tickers": ["UCU.V", "UURAF"]})
+    assert p["tickers"] == ["UCU.V", "UURAF"]
 
-    p2 = _canonicalize_payload({"type": "drill_assay", "tickers": "FRE.V, FREFF"})
-    assert p2["tickers"] == ["FRE.V", "FREFF"]
+    p2 = _canonicalize_payload({"type": "drill_assay", "tickers": "UCU.V, UURAF"})
+    assert p2["tickers"] == ["UCU.V", "UURAF"]
 
     p3 = _canonicalize_payload({"type": "drill_assay"})
     assert p3["tickers"] == []
@@ -181,12 +181,12 @@ def test_ree_chain_scoring():
     events = load_recent_events(hours=9999)
     rows = compute_chain_scores(events)
 
-    # Frontier REE should have claims + drill + resource + deal = high score
-    frontier_rows = [r for r in rows if r.get("company") == "Frontier Rare Earths Ltd"]
-    assert len(frontier_rows) == 1
-    fr = frontier_rows[0]
-    assert fr["has_claims"] is True
-    assert fr["has_drill_assay"] is True
-    assert fr["has_resource"] is True
-    assert fr["has_deal"] is True
-    assert fr["score"] >= 0.8
+    # Ucore REE should have claims + drill + resource + deal = high score
+    ucore_rows = [r for r in rows if r.get("company") == "Ucore Rare Metals Inc."]
+    assert len(ucore_rows) == 1
+    ur = ucore_rows[0]
+    assert ur["has_claims"] is True
+    assert ur["has_drill_assay"] is True
+    assert ur["has_resource"] is True
+    assert ur["has_deal"] is True
+    assert ur["score"] >= 0.8
