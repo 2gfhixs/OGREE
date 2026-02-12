@@ -29,6 +29,12 @@ You can override the default DB URL:
 DATABASE_URL="postgresql://ogree:ogree@localhost:5432/ogree" make smoke
 ```
 
+If you already have a reachable Postgres (local or remote) and want to skip Docker orchestration:
+
+```bash
+SMOKE_SKIP_DOCKER=1 DATABASE_URL="postgresql://user:pass@host:5432/dbname" make smoke
+```
+
 
 ## Notes / Known caveats
 

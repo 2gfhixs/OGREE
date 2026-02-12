@@ -7,6 +7,7 @@ cd "${ROOT_DIR}"
 SMOKE_PREFIX="[smoke]"
 DEFAULT_DATABASE_URL="postgresql://ogree:ogree@localhost:5432/ogree"
 DATABASE_URL="${DATABASE_URL:-${DEFAULT_DATABASE_URL}}"
+SMOKE_SKIP_DOCKER="${SMOKE_SKIP_DOCKER:-0}"
 export DATABASE_URL
 
 log() {
@@ -110,29 +111,33 @@ if ! "${PYTHON_BIN}" -c "import alembic, pytest, sqlalchemy, typer, yaml, psycop
   fail "Missing Python deps. Install with: python3 -m pip install --user pytest sqlalchemy alembic pydantic pydantic-settings typer pyyaml psycopg2-binary"
 fi
 
-COMPOSE_CMD="$(pick_compose)" || fail "Neither 'docker-compose' nor 'docker compose' is available."
-log "Using compose command: ${COMPOSE_CMD}"
-
-if [[ "${COMPOSE_CMD}" == "docker-compose" ]]; then
-  if ! docker-compose version >/dev/null 2>&1; then
-    fail "docker-compose exists but is not functional in this environment."
-  fi
+if [[ "${SMOKE_SKIP_DOCKER}" == "1" ]]; then
+  log "SMOKE_SKIP_DOCKER=1, skipping docker/compose startup (DATABASE_URL=${DATABASE_URL})."
 else
-  if ! docker version >/dev/null 2>&1; then
-    fail "docker CLI found but Docker daemon is unavailable."
+  COMPOSE_CMD="$(pick_compose)" || fail "Neither 'docker-compose' nor 'docker compose' is available."
+  log "Using compose command: ${COMPOSE_CMD}"
+
+  if [[ "${COMPOSE_CMD}" == "docker-compose" ]]; then
+    if ! docker-compose version >/dev/null 2>&1; then
+      fail "docker-compose exists but is not functional in this environment."
+    fi
+  else
+    if ! docker version >/dev/null 2>&1; then
+      fail "docker CLI found but Docker daemon is unavailable."
+    fi
   fi
-fi
 
-log "Bringing up Postgres container..."
-if [[ "${COMPOSE_CMD}" == "docker-compose" ]]; then
-  docker-compose up -d
-else
-  docker compose up -d
-fi
+  log "Bringing up Postgres container..."
+  if [[ "${COMPOSE_CMD}" == "docker-compose" ]]; then
+    docker-compose up -d
+  else
+    docker compose up -d
+  fi
 
-log "Waiting for Postgres on localhost:5432..."
-if ! wait_for_port "127.0.0.1" "5432" "60" "${PYTHON_BIN}"; then
-  fail "Postgres did not become ready on localhost:5432 within 60 seconds."
+  log "Waiting for Postgres on localhost:5432..."
+  if ! wait_for_port "127.0.0.1" "5432" "60" "${PYTHON_BIN}"; then
+    fail "Postgres did not become ready on localhost:5432 within 60 seconds."
+  fi
 fi
 
 log "Running Alembic migrations..."
