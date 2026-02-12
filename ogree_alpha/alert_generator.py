@@ -58,6 +58,8 @@ def build_alert(row: Dict[str, Any], utc_date: str, company_id: str | None = Non
         "has_production": bool(row.get("has_production")),
         "has_insider_buy": bool(row.get("has_insider_buy")),
         "has_insider_buy_cluster": bool(row.get("has_insider_buy_cluster")),
+        "convergence_score": int(row.get("convergence_score") or 0),
+        "convergence_categories": list(row.get("convergence_categories") or []),
     }
 
     actor = row.get("operator") or row.get("company") or "unknown"
@@ -66,6 +68,9 @@ def build_alert(row: Dict[str, Any], utc_date: str, company_id: str | None = Non
         f"{row.get('permit_id') or lineage_id} ({actor}, {row.get('region')}) "
         f"score={score_summary['score']}"
     )
+    if score_summary["convergence_score"] >= 3:
+        categories_text = ",".join(score_summary["convergence_categories"])
+        summary += f" convergence={score_summary['convergence_score']} [{categories_text}]"
 
     # Ensure JSONB field doesn't contain datetime objects
     row_safe = dict(row)

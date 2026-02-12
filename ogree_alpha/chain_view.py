@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
 
+from ogree_alpha.convergence import apply_convergence
 from ogree_alpha.db.models import EventLog
 from ogree_alpha.db.session import get_session
 
@@ -100,7 +101,7 @@ def _has_insider_buy_cluster(records: List[Dict[str, Any]], window_days: int = 3
     return False
 
 
-def compute_chain_scores(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def compute_chain_scores(events: List[Dict[str, Any]], convergence_window_days: int = 30) -> List[Dict[str, Any]]:
     """
     Group events by lineage_id and score progress:
       permit_filed => +0.4
@@ -277,6 +278,7 @@ def compute_chain_scores(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             }
         )
 
+    rows_out = apply_convergence(rows_out, events, window_days=convergence_window_days)
     rows_out.sort(key=lambda r: r["score"], reverse=True)
     return rows_out
 
