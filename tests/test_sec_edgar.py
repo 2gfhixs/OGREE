@@ -16,6 +16,7 @@ from ogree_alpha.adapters.sec_edgar import (
     _normalize_type,
     _normalize_transaction_type,
     _parse_dt,
+    parse_form4_transactions,
     iter_fixture_events,
 )
 from ogree_alpha.chain_view import compute_chain_scores
@@ -49,11 +50,74 @@ def test_derive_lineage_prefers_company_id():
 
 
 def test_classify_form_event_type():
-    assert _classify_form_event_type("4") == "insider_buy"
-    assert _classify_form_event_type("4/A") == "insider_buy"
+    assert _classify_form_event_type("4") == "form4"
+    assert _classify_form_event_type("4/A") == "form4"
     assert _classify_form_event_type("SC 13G") == "institutional_13g"
     assert _classify_form_event_type("13F-HR") == "institutional_13f"
     assert _classify_form_event_type("8-K") is None
+
+
+def test_parse_form4_transactions_buy_sell_exercise():
+    xml = """
+    <ownershipDocument>
+      <reportingOwner>
+        <reportingOwnerId>
+          <rptOwnerName>Jane Q Doe</rptOwnerName>
+        </reportingOwnerId>
+        <reportingOwnerRelationship>
+          <isDirector>1</isDirector>
+          <isOfficer>1</isOfficer>
+          <isTenPercentOwner>0</isTenPercentOwner>
+          <isOther>0</isOther>
+          <officerTitle>CEO</officerTitle>
+        </reportingOwnerRelationship>
+      </reportingOwner>
+      <nonDerivativeTable>
+        <nonDerivativeTransaction>
+          <securityTitle><value>Common Stock</value></securityTitle>
+          <transactionDate><value>2026-02-01</value></transactionDate>
+          <transactionCoding><transactionCode>P</transactionCode></transactionCoding>
+          <transactionAmounts>
+            <transactionShares><value>10000</value></transactionShares>
+            <transactionPricePerShare><value>2.5</value></transactionPricePerShare>
+            <transactionAcquiredDisposedCode><value>A</value></transactionAcquiredDisposedCode>
+          </transactionAmounts>
+          <ownershipNature><directOrIndirectOwnership><value>D</value></directOrIndirectOwnership></ownershipNature>
+        </nonDerivativeTransaction>
+        <nonDerivativeTransaction>
+          <securityTitle><value>Common Stock</value></securityTitle>
+          <transactionDate><value>2026-02-02</value></transactionDate>
+          <transactionCoding><transactionCode>S</transactionCode></transactionCoding>
+          <transactionAmounts>
+            <transactionShares><value>5000</value></transactionShares>
+            <transactionPricePerShare><value>2.9</value></transactionPricePerShare>
+            <transactionAcquiredDisposedCode><value>D</value></transactionAcquiredDisposedCode>
+          </transactionAmounts>
+        </nonDerivativeTransaction>
+      </nonDerivativeTable>
+      <derivativeTable>
+        <derivativeTransaction>
+          <securityTitle><value>Option (right to buy)</value></securityTitle>
+          <transactionDate><value>2026-02-03</value></transactionDate>
+          <transactionCoding><transactionCode>M</transactionCode></transactionCoding>
+          <transactionAmounts>
+            <transactionShares><value>7000</value></transactionShares>
+            <transactionPricePerShare><value>1.1</value></transactionPricePerShare>
+            <transactionAcquiredDisposedCode><value>A</value></transactionAcquiredDisposedCode>
+          </transactionAmounts>
+          <underlyingSecurity>
+            <underlyingSecurityTitle><value>Common Stock</value></underlyingSecurityTitle>
+          </underlyingSecurity>
+        </derivativeTransaction>
+      </derivativeTable>
+    </ownershipDocument>
+    """
+    rows = parse_form4_transactions(xml)
+    assert len(rows) == 3
+    types = {r.get("event_type") for r in rows}
+    assert types == {"insider_buy", "insider_sell", "insider_option_exercise"}
+    assert all(r.get("filer_name") == "Jane Q Doe" for r in rows)
+    assert all(r.get("relationship") == "officer/director" for r in rows)
 
 
 def test_canonicalize_payload_resolves_company_and_computes_total():
@@ -95,6 +159,55 @@ def test_iter_live_events_from_mocked_submissions(monkeypatch):
             }
         }
     }
+    form4_xml = """
+    <ownershipDocument>
+      <reportingOwner>
+        <reportingOwnerId><rptOwnerName>Dana Morgan</rptOwnerName></reportingOwnerId>
+        <reportingOwnerRelationship>
+          <isDirector>1</isDirector>
+          <isOfficer>1</isOfficer>
+          <isTenPercentOwner>0</isTenPercentOwner>
+        </reportingOwnerRelationship>
+      </reportingOwner>
+      <nonDerivativeTable>
+        <nonDerivativeTransaction>
+          <securityTitle><value>Common Stock</value></securityTitle>
+          <transactionDate><value>2026-02-01</value></transactionDate>
+          <transactionCoding><transactionCode>P</transactionCode></transactionCoding>
+          <transactionAmounts>
+            <transactionShares><value>10000</value></transactionShares>
+            <transactionPricePerShare><value>13.1</value></transactionPricePerShare>
+            <transactionAcquiredDisposedCode><value>A</value></transactionAcquiredDisposedCode>
+          </transactionAmounts>
+        </nonDerivativeTransaction>
+        <nonDerivativeTransaction>
+          <securityTitle><value>Common Stock</value></securityTitle>
+          <transactionDate><value>2026-02-02</value></transactionDate>
+          <transactionCoding><transactionCode>S</transactionCode></transactionCoding>
+          <transactionAmounts>
+            <transactionShares><value>2500</value></transactionShares>
+            <transactionPricePerShare><value>13.6</value></transactionPricePerShare>
+            <transactionAcquiredDisposedCode><value>D</value></transactionAcquiredDisposedCode>
+          </transactionAmounts>
+        </nonDerivativeTransaction>
+      </nonDerivativeTable>
+      <derivativeTable>
+        <derivativeTransaction>
+          <securityTitle><value>Option</value></securityTitle>
+          <transactionDate><value>2026-02-03</value></transactionDate>
+          <transactionCoding><transactionCode>M</transactionCode></transactionCoding>
+          <transactionAmounts>
+            <transactionShares><value>7000</value></transactionShares>
+            <transactionPricePerShare><value>8.0</value></transactionPricePerShare>
+            <transactionAcquiredDisposedCode><value>A</value></transactionAcquiredDisposedCode>
+          </transactionAmounts>
+          <underlyingSecurity>
+            <underlyingSecurityTitle><value>Common Stock</value></underlyingSecurityTitle>
+          </underlyingSecurity>
+        </derivativeTransaction>
+      </derivativeTable>
+    </ownershipDocument>
+    """
 
     def _fake_http_get_json(url: str, *, user_agent: str, timeout_s: int = 20):
         if url == SEC_TICKER_MAP_URL:
@@ -103,7 +216,13 @@ def test_iter_live_events_from_mocked_submissions(monkeypatch):
             return submissions
         return {}
 
+    def _fake_http_get_text(url: str, *, user_agent: str, timeout_s: int = 20):
+        if "doc1.xml" in url:
+            return form4_xml
+        return ""
+
     monkeypatch.setattr(sec_edgar, "_http_get_json", _fake_http_get_json)
+    monkeypatch.setattr(sec_edgar, "_http_get_text", _fake_http_get_text)
 
     out = list(
         sec_edgar.iter_live_events(
@@ -112,9 +231,11 @@ def test_iter_live_events_from_mocked_submissions(monkeypatch):
             timeout_s=1,
         )
     )
-    assert len(out) == 2
+    assert len(out) == 4
     types = [o.get("payload_json", {}).get("type") for o in out]
     assert "insider_buy" in types
+    assert "insider_sell" in types
+    assert "insider_option_exercise" in types
     assert "institutional_13g" in types
     assert all(o.get("source_event_id", "").startswith("sec_live_") for o in out)
 

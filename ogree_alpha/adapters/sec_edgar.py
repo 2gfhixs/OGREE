@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Tuple
 from urllib import request
 from urllib.error import HTTPError, URLError
+import xml.etree.ElementTree as ET
 
 from ogree_alpha.db.repo import insert_raw_event
 from ogree_alpha.entity_resolution import resolve_company
@@ -191,12 +193,32 @@ def _http_get_json(url: str, *, user_agent: str, timeout_s: int = 20) -> Dict[st
         return {}
 
 
+def _http_get_text(url: str, *, user_agent: str, timeout_s: int = 20) -> str:
+    req = request.Request(
+        url,
+        headers={
+            "User-Agent": user_agent,
+            "Accept": "text/plain,application/xml,application/xhtml+xml,*/*",
+        },
+    )
+    try:
+        with request.urlopen(req, timeout=timeout_s) as resp:
+            raw = resp.read()
+            try:
+                encoding = resp.headers.get_content_charset() or "utf-8"
+                return raw.decode(encoding, errors="replace")
+            except Exception:
+                return raw.decode("utf-8", errors="replace")
+    except (HTTPError, URLError, TimeoutError):
+        return ""
+
+
 def _classify_form_event_type(form: Any) -> str | None:
     key = str(form or "").strip().upper()
     if not key:
         return None
     if key in {"4", "4/A"}:
-        return "insider_buy"
+        return "form4"
     if key in {"SC 13G", "SC 13G/A", "13G", "13G/A"}:
         return "institutional_13g"
     if key in {"13F-HR", "13F-HR/A"}:
@@ -225,6 +247,13 @@ def _load_ticker_to_cik_map(*, user_agent: str, timeout_s: int = 20) -> Dict[str
     return out
 
 
+def _build_filing_txt_url(cik_10: str, accession: str | None) -> str | None:
+    if not accession:
+        return None
+    accession_clean = accession.replace("-", "")
+    return f"https://www.sec.gov/Archives/edgar/data/{int(cik_10)}/{accession_clean}/{accession}.txt"
+
+
 def _recent_value(recent: Mapping[str, Any], key: str, idx: int) -> Any:
     values = recent.get(key)
     if isinstance(values, list) and idx < len(values):
@@ -240,6 +269,132 @@ def _build_filing_url(cik_10: str, accession: str | None, primary_document: str 
     if not doc:
         return None
     return f"https://www.sec.gov/Archives/edgar/data/{int(cik_10)}/{accession_clean}/{doc}"
+
+
+def _truthy(value: Any) -> bool:
+    v = str(value or "").strip().lower()
+    return v in {"1", "true", "t", "yes", "y"}
+
+
+def _xml_text(node: ET.Element | None, path: str) -> str | None:
+    if node is None:
+        return None
+    found = node.find(path)
+    if found is None:
+        return None
+    return _clean_str(found.text)
+
+
+def _extract_form4_xml(text: str) -> str | None:
+    if not text:
+        return None
+    s = text.strip()
+    if "<ownershipDocument" in s and s.startswith("<"):
+        m = re.search(r"(<ownershipDocument[\s\S]*?</ownershipDocument>)", s, flags=re.IGNORECASE)
+        return m.group(1) if m else s
+
+    xml_block = re.search(r"<XML>([\s\S]*?)</XML>", s, flags=re.IGNORECASE)
+    if xml_block:
+        chunk = xml_block.group(1).strip()
+        if "<ownershipDocument" in chunk:
+            m = re.search(r"(<ownershipDocument[\s\S]*?</ownershipDocument>)", chunk, flags=re.IGNORECASE)
+            return m.group(1) if m else chunk
+
+    m = re.search(r"(<ownershipDocument[\s\S]*?</ownershipDocument>)", s, flags=re.IGNORECASE)
+    return m.group(1) if m else None
+
+
+def _classify_form4_transaction(code: str | None) -> tuple[str | None, str | None]:
+    key = str(code or "").strip().upper()
+    if key == "P":
+        return "insider_buy", "purchase"
+    if key == "S":
+        return "insider_sell", "sale"
+    if key == "M":
+        return "insider_option_exercise", "exercise"
+    return None, None
+
+
+def _parse_reporting_owner(root: ET.Element) -> Dict[str, Any]:
+    owners = root.findall(".//{*}reportingOwner")
+    if not owners:
+        return {}
+    first = owners[0]
+    rel = first.find("./{*}reportingOwnerRelationship")
+    is_director = _truthy(_xml_text(rel, "./{*}isDirector"))
+    is_officer = _truthy(_xml_text(rel, "./{*}isOfficer"))
+    is_ten_pct = _truthy(_xml_text(rel, "./{*}isTenPercentOwner"))
+    officer_title = _xml_text(rel, "./{*}officerTitle")
+    is_other = _truthy(_xml_text(rel, "./{*}isOther"))
+    other_text = _xml_text(rel, "./{*}otherText")
+
+    rel_parts: list[str] = []
+    if is_officer:
+        rel_parts.append("officer")
+    if is_director:
+        rel_parts.append("director")
+    if is_ten_pct:
+        rel_parts.append("10% owner")
+    if is_other and other_text:
+        rel_parts.append(other_text)
+    if not rel_parts and is_other:
+        rel_parts.append("other")
+    relationship = "/".join(rel_parts) if rel_parts else None
+
+    return {
+        "filer_name": _xml_text(first, "./{*}reportingOwnerId/{*}rptOwnerName"),
+        "relationship": relationship,
+        "officer_title": officer_title,
+        "co_reporting_owner_count": max(len(owners) - 1, 0),
+    }
+
+
+def parse_form4_transactions(text: str) -> list[Dict[str, Any]]:
+    xml_doc = _extract_form4_xml(text)
+    if not xml_doc:
+        return []
+    try:
+        root = ET.fromstring(xml_doc)
+    except ET.ParseError:
+        return []
+
+    owner = _parse_reporting_owner(root)
+    rows: list[Dict[str, Any]] = []
+
+    tx_nodes: list[tuple[str, ET.Element]] = []
+    tx_nodes.extend([("non_derivative", n) for n in root.findall(".//{*}nonDerivativeTransaction")])
+    tx_nodes.extend([("derivative", n) for n in root.findall(".//{*}derivativeTransaction")])
+
+    for bucket, tx in tx_nodes:
+        transaction_code = _xml_text(tx, "./{*}transactionCoding/{*}transactionCode")
+        event_type, transaction_type = _classify_form4_transaction(transaction_code)
+        if not event_type:
+            continue
+        shares = _as_float(_xml_text(tx, "./{*}transactionAmounts/{*}transactionShares/{*}value"))
+        price = _as_float(_xml_text(tx, "./{*}transactionAmounts/{*}transactionPricePerShare/{*}value"))
+        total_value = round(shares * price, 2) if shares is not None and price is not None else None
+        rows.append(
+            {
+                "event_type": event_type,
+                "transaction_type": transaction_type,
+                "transaction_code": transaction_code,
+                "transaction_date": _xml_text(tx, "./{*}transactionDate/{*}value"),
+                "shares": shares,
+                "price_per_share": price,
+                "total_value": total_value,
+                "acquired_disposed_code": _xml_text(
+                    tx, "./{*}transactionAmounts/{*}transactionAcquiredDisposedCode/{*}value"
+                ),
+                "security_title": _xml_text(tx, "./{*}securityTitle/{*}value"),
+                "underlying_security_title": _xml_text(
+                    tx, "./{*}underlyingSecurity/{*}underlyingSecurityTitle/{*}value"
+                ),
+                "direct_or_indirect": _xml_text(tx, "./{*}ownershipNature/{*}directOrIndirectOwnership/{*}value"),
+                "bucket": bucket,
+                **owner,
+            }
+        )
+    return rows
 
 
 def _derive_lineage_id(payload: Mapping[str, Any]) -> str | None:
@@ -328,16 +483,65 @@ def iter_live_events(
         if not isinstance(forms, list):
             continue
 
-        emitted = 0
+        filings_processed = 0
         for idx, form in enumerate(forms):
             event_type = _classify_form_event_type(form)
             if not event_type:
                 continue
+            if filings_processed >= max_filings_per_company:
+                break
 
             accession = _clean_str(_recent_value(recent, "accessionNumber", idx))
             filing_date = _recent_value(recent, "filingDate", idx)
             primary_document = _clean_str(_recent_value(recent, "primaryDocument", idx))
             if not accession or not filing_date:
+                continue
+            filings_processed += 1
+
+            filing_url = _build_filing_url(cik_10, accession, primary_document)
+
+            if event_type == "form4":
+                text = _http_get_text(filing_url, user_agent=user_agent, timeout_s=timeout_s) if filing_url else ""
+                tx_rows = parse_form4_transactions(text)
+                if not tx_rows:
+                    txt_url = _build_filing_txt_url(cik_10, accession)
+                    if txt_url:
+                        tx_rows = parse_form4_transactions(
+                            _http_get_text(txt_url, user_agent=user_agent, timeout_s=timeout_s)
+                        )
+
+                for tx_idx, tx in enumerate(tx_rows):
+                    tx_event_type = tx.get("event_type")
+                    if tx_event_type not in VALID_TYPES:
+                        continue
+                    payload = {
+                        "type": tx_event_type,
+                        "form_type": _clean_str(form),
+                        "filing_accession": accession,
+                        "filer_name": tx.get("filer_name") or name,
+                        "relationship": tx.get("relationship"),
+                        "transaction_type": tx.get("transaction_type"),
+                        "shares": tx.get("shares"),
+                        "price_per_share": tx.get("price_per_share"),
+                        "total_value": tx.get("total_value"),
+                        "transaction_code": tx.get("transaction_code"),
+                        "acquired_disposed_code": tx.get("acquired_disposed_code"),
+                        "security_title": tx.get("security_title"),
+                        "underlying_security_title": tx.get("underlying_security_title"),
+                        "direct_or_indirect": tx.get("direct_or_indirect"),
+                        "company": name,
+                        "tickers": [t for t in raw_tickers if isinstance(t, str)],
+                        "cik": cik_10,
+                        "filing_url": filing_url,
+                        "co_reporting_owner_count": tx.get("co_reporting_owner_count"),
+                        "officer_title": tx.get("officer_title"),
+                    }
+                    yield {
+                        "source_system": SOURCE_SYSTEM,
+                        "source_event_id": f"sec_live_{accession}_{tx_idx}",
+                        "event_time": tx.get("transaction_date") or filing_date,
+                        "payload_json": payload,
+                    }
                 continue
 
             payload = {
@@ -345,7 +549,7 @@ def iter_live_events(
                 "form_type": _clean_str(form),
                 "filing_accession": accession,
                 "filer_name": name,
-                "relationship": "institution" if event_type.startswith("institutional_") else "officer/director/10% owner",
+                "relationship": "institution",
                 "transaction_type": "purchase",
                 "shares": None,
                 "price_per_share": None,
@@ -353,19 +557,14 @@ def iter_live_events(
                 "company": name,
                 "tickers": [t for t in raw_tickers if isinstance(t, str)],
                 "cik": cik_10,
-                "filing_url": _build_filing_url(cik_10, accession, primary_document),
-                "source_note": "Derived from SEC submissions feed; transaction detail parsing not yet enabled.",
+                "filing_url": filing_url,
             }
-
             yield {
                 "source_system": SOURCE_SYSTEM,
                 "source_event_id": f"sec_live_{accession}",
                 "event_time": filing_date,
                 "payload_json": payload,
             }
-            emitted += 1
-            if emitted >= max_filings_per_company:
-                break
 
 
 def _build_source_event_id(
