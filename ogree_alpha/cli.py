@@ -205,6 +205,8 @@ def run_all(
     ),
 ) -> None:
     """Run full pipeline: ingest fixture sources (+optional live SEC) -> alerts -> report."""
+    sec_live_enabled = sec_live if isinstance(sec_live, bool) else bool(getattr(sec_live, "default", False))
+
     typer.echo("=== Ingest: Demo ===")
     ingest_demo(path="sample_data/raw_events.jsonl")
 
@@ -220,7 +222,7 @@ def run_all(
     typer.echo("\n=== Ingest: SEC EDGAR ===")
     ingest_sec(path="sample_data/sec_edgar/form4_events.jsonl")
 
-    if sec_live:
+    if sec_live_enabled:
         typer.echo("\n=== Ingest: SEC EDGAR (live) ===")
         ingest_sec_live(
             max_filings_per_company=sec_live_max_filings_per_company,
