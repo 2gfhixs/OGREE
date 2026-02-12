@@ -44,6 +44,11 @@ _CATEGORY_E_TYPES = {
 }
 _CATEGORY_F_TYPES = {
     "policy_designation",
+    "policy_final_rule",
+    "policy_nprm_open",
+    "policy_comment_deadline",
+    "congressional_trade_disclosure",
+    "legislation_committee_advance",
 }
 
 
@@ -119,7 +124,7 @@ def _event_categories(payload: Mapping[str, Any]) -> Set[str]:
         categories.add("D")
     if t in _CATEGORY_E_TYPES:
         categories.add("E")
-    if t in _CATEGORY_F_TYPES or "policy" in t or "macro" in t:
+    if t in _CATEGORY_F_TYPES or any(k in t for k in ("policy", "macro", "rule", "nprm", "congress", "legislation", "committee")):
         categories.add("F")
     return categories
 

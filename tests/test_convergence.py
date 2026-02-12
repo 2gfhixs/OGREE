@@ -116,3 +116,20 @@ def test_alert_summary_omits_convergence_when_below_threshold():
     }
     alert = build_alert(row, utc_date="2026-02-10")
     assert "convergence=" not in alert["summary"]
+
+
+def test_convergence_classifies_policy_agent_events_as_category_f():
+    t0 = datetime(2026, 2, 1, 0, 0, tzinfo=timezone.utc)
+    events = [
+        _evt(t0, lineage_id="L_POLICY", event_type="permit_filed", company="Permian Resources Corporation"),
+        _evt(
+            t0 + timedelta(days=1),
+            lineage_id="L_POLICY",
+            event_type="legislation_committee_advance",
+            company="Permian Resources Corporation",
+        ),
+    ]
+    rows = compute_chain_scores(events)
+    assert len(rows) == 1
+    row = rows[0]
+    assert set(row["convergence_categories"]) >= {"A", "F"}

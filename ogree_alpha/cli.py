@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime, timezone
 from typing import Optional
 
 import typer
@@ -30,6 +31,18 @@ def _validate_sec_live_safety_params(
         raise typer.BadParameter("max_retries must be between 0 and 10")
     if backoff_base_s < 0.0 or backoff_base_s > 120.0:
         raise typer.BadParameter("backoff_base_s must be between 0.0 and 120.0 seconds")
+
+
+def _parse_recipients_csv(value: str) -> list[str]:
+    emails = [v.strip() for v in (value or "").split(",") if v.strip()]
+    if not emails:
+        raise typer.BadParameter("At least one recipient email is required (--to)")
+    return emails
+
+
+def _default_eml_output_path() -> str:
+    day = datetime.now(timezone.utc).date().isoformat()
+    return f"output/ogree_report_{day}.eml"
 
 
 @app.command("db-check")
@@ -114,6 +127,34 @@ def ingest_sec(
 
     inserted, processed = ingest_fixture_to_db(path)
     typer.echo(f"SEC EDGAR: processed {processed}, inserted {inserted} new events")
+
+
+@app.command("ingest-fed-rules")
+def ingest_fed_rules(
+    path: str = typer.Option(
+        "sample_data/federal_register/events.jsonl",
+        help="Path to Federal Register fixture JSONL",
+    ),
+) -> None:
+    """Ingest Federal Register final-rule policy events into event_log."""
+    from ogree_alpha.adapters.federal_register_rules import ingest_fixture_to_db
+
+    inserted, processed = ingest_fixture_to_db(path)
+    typer.echo(f"Federal Register: processed {processed}, inserted {inserted} new events")
+
+
+@app.command("ingest-policy")
+def ingest_policy(
+    path: str = typer.Option(
+        "sample_data/policy_signals/events.jsonl",
+        help="Path to NPRM/congressional fixture JSONL",
+    ),
+) -> None:
+    """Ingest NPRM/comment/congressional policy signals into event_log."""
+    from ogree_alpha.adapters.nprm_congressional import ingest_fixture_to_db
+
+    inserted, processed = ingest_fixture_to_db(path)
+    typer.echo(f"Policy signals: processed {processed}, inserted {inserted} new events")
 
 
 @app.command("ingest-sec-live")
@@ -222,6 +263,58 @@ def health(
         typer.echo(render_text(snapshot))
 
 
+@app.command("email-report")
+def email_report(
+    to: str = typer.Option(..., help="Comma-separated recipient list"),
+    from_email: str = typer.Option("ogree-alpha@localhost", help="From address"),
+    hours: int = typer.Option(24, help="Lookback window in hours"),
+    top_n: int = typer.Option(10, help="Max items per report section"),
+    output: Optional[str] = typer.Option(None, help="Path to write .eml file"),
+    send: bool = typer.Option(False, help="Send email via SMTP after writing .eml"),
+    smtp_host: Optional[str] = typer.Option(None, help="SMTP host (or env SMTP_HOST)"),
+    smtp_port: int = typer.Option(587, help="SMTP port"),
+    smtp_user: Optional[str] = typer.Option(None, help="SMTP username (or env SMTP_USER)"),
+    smtp_password: Optional[str] = typer.Option(None, help="SMTP password (or env SMTP_PASSWORD)"),
+    smtp_tls: bool = typer.Option(True, help="Use STARTTLS for SMTP"),
+    smtp_ssl: bool = typer.Option(False, help="Use SMTP over SSL"),
+) -> None:
+    """Render report as RFC822 email (.eml), optionally send via SMTP."""
+    from ogree_alpha.email_report import (
+        build_report_email_message,
+        save_email_message,
+        send_email_via_smtp,
+    )
+    from ogree_alpha.report_twice_daily import render_report
+
+    recipients = _parse_recipients_csv(to)
+    report_obj = render_report(hours=hours, top_n=top_n)
+    message = build_report_email_message(
+        report_obj=report_obj,
+        from_email=from_email,
+        to_emails=recipients,
+    )
+    output_path = output or _default_eml_output_path()
+    save_email_message(message, output_path)
+    typer.echo(f"Email report written to {output_path}")
+
+    if send:
+        host = smtp_host or os.getenv("SMTP_HOST")
+        user = smtp_user or os.getenv("SMTP_USER")
+        password = smtp_password or os.getenv("SMTP_PASSWORD")
+        if not host:
+            raise typer.BadParameter("SMTP host is required when --send is used (set --smtp-host or SMTP_HOST)")
+        send_email_via_smtp(
+            message=message,
+            host=host,
+            port=smtp_port,
+            username=user,
+            password=password,
+            use_tls=smtp_tls,
+            use_ssl=smtp_ssl,
+        )
+        typer.echo(f"Email report sent via {host}:{smtp_port}")
+
+
 @app.command("run-all")
 def run_all(
     hours: int = typer.Option(72, help="Event lookback window in hours"),
@@ -283,6 +376,12 @@ def run_all(
 
     typer.echo("\n=== Ingest: SEC EDGAR ===")
     ingest_sec(path="sample_data/sec_edgar/form4_events.jsonl")
+
+    typer.echo("\n=== Ingest: Federal Register rules ===")
+    ingest_fed_rules(path="sample_data/federal_register/events.jsonl")
+
+    typer.echo("\n=== Ingest: Policy signals (NPRM/Congressional) ===")
+    ingest_policy(path="sample_data/policy_signals/events.jsonl")
 
     if sec_live_enabled:
         typer.echo("\n=== Ingest: SEC EDGAR (live) ===")

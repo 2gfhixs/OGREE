@@ -38,6 +38,13 @@ SMOKE_SKIP_DOCKER=1 DATABASE_URL="postgresql://user:pass@host:5432/dbname" make 
 
 ## Useful CLI commands
 
+- Ingest policy agents (fixture mode):
+
+```bash
+DATABASE_URL="postgresql://ogree:ogree@localhost:5432/ogree" python -m ogree_alpha ingest-fed-rules
+DATABASE_URL="postgresql://ogree:ogree@localhost:5432/ogree" python -m ogree_alpha ingest-policy
+```
+
 - Pipeline health snapshot:
 
 ```bash
@@ -69,6 +76,14 @@ Validation guardrails:
 
 ```bash
 DATABASE_URL="postgresql://ogree:ogree@localhost:5432/ogree" python -m ogree_alpha run-all --sec-live --sec-live-max-filings-per-company 20 --sec-live-user-agent "OGREE/0.1 (you@example.com)"
+```
+
+- Export demo-ready email report (`.eml`) and optionally send:
+
+```bash
+DATABASE_URL="postgresql://ogree:ogree@localhost:5432/ogree" python -m ogree_alpha email-report --to "team@example.com" --output output/demo_report.eml
+# optional send:
+# python -m ogree_alpha email-report --to "team@example.com" --send --smtp-host smtp.example.com --smtp-user user --smtp-password pass
 ```
 
 

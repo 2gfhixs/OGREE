@@ -53,6 +53,14 @@ REE_U_STUDY_TYPES = {"pea_published", "pfs_published", "feasibility_study"}
 REE_U_DEAL_TYPES = {"financing_closed", "financing_announced", "offtake_agreement"}
 REE_U_POLICY_TYPES = {"policy_designation"}
 INSIDER_BUY_TYPES = {"insider_buy"}
+GLOBAL_POLICY_TYPES = {
+    "policy_designation",
+    "policy_final_rule",
+    "policy_nprm_open",
+    "policy_comment_deadline",
+    "congressional_trade_disclosure",
+    "legislation_committee_advance",
+}
 
 
 def _coerce_utc(value: Any) -> datetime | None:
@@ -181,6 +189,8 @@ def compute_chain_scores(events: List[Dict[str, Any]], convergence_window_days: 
                     "filer_name": pj.get("filer_name"),
                 }
             )
+        if t in GLOBAL_POLICY_TYPES:
+            b["has_policy"] = True
 
         # baseline AK-ish semantics
         if t == "permit_filed":

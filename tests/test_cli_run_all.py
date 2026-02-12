@@ -14,6 +14,8 @@ def test_run_all_default_does_not_call_live_sec(monkeypatch):
     monkeypatch.setattr(cli, "ingest_tx", lambda **kwargs: calls.append("ingest_tx"))
     monkeypatch.setattr(cli, "ingest_ree", lambda **kwargs: calls.append("ingest_ree"))
     monkeypatch.setattr(cli, "ingest_sec", lambda **kwargs: calls.append("ingest_sec"))
+    monkeypatch.setattr(cli, "ingest_fed_rules", lambda **kwargs: calls.append("ingest_fed_rules"))
+    monkeypatch.setattr(cli, "ingest_policy", lambda **kwargs: calls.append("ingest_policy"))
     monkeypatch.setattr(cli, "ingest_sec_live", lambda **kwargs: calls.append("ingest_sec_live"))
     monkeypatch.setattr(cli, "generate_alerts", lambda **kwargs: calls.append("generate_alerts"))
     monkeypatch.setattr(cli, "report", lambda **kwargs: calls.append("report"))
@@ -22,6 +24,8 @@ def test_run_all_default_does_not_call_live_sec(monkeypatch):
     cli.run_all(hours=72, report_hours=24, top_n=25, report_file=None)
 
     assert "ingest_sec" in calls
+    assert "ingest_fed_rules" in calls
+    assert "ingest_policy" in calls
     assert "ingest_sec_live" not in calls
     assert calls[-1] == "opportunities"
 
@@ -34,6 +38,8 @@ def test_run_all_calls_live_sec_when_enabled(monkeypatch):
     monkeypatch.setattr(cli, "ingest_tx", lambda **kwargs: calls.append(("ingest_tx", kwargs)))
     monkeypatch.setattr(cli, "ingest_ree", lambda **kwargs: calls.append(("ingest_ree", kwargs)))
     monkeypatch.setattr(cli, "ingest_sec", lambda **kwargs: calls.append(("ingest_sec", kwargs)))
+    monkeypatch.setattr(cli, "ingest_fed_rules", lambda **kwargs: calls.append(("ingest_fed_rules", kwargs)))
+    monkeypatch.setattr(cli, "ingest_policy", lambda **kwargs: calls.append(("ingest_policy", kwargs)))
     monkeypatch.setattr(cli, "generate_alerts", lambda **kwargs: calls.append(("generate_alerts", kwargs)))
     monkeypatch.setattr(cli, "report", lambda **kwargs: calls.append(("report", kwargs)))
     monkeypatch.setattr(cli, "opportunities", lambda **kwargs: calls.append(("opportunities", kwargs)))
