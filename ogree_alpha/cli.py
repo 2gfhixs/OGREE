@@ -186,8 +186,25 @@ def run_all(
     report_hours: int = typer.Option(24, help="Report lookback window in hours"),
     top_n: int = typer.Option(25, help="Max alerts"),
     report_file: Optional[str] = typer.Option(None, help="Write report to file"),
+    sec_live: bool = typer.Option(False, help="Also ingest live SEC EDGAR submissions"),
+    sec_live_max_filings_per_company: int = typer.Option(
+        20,
+        help="Max live SEC filings per company (used with --sec-live)",
+    ),
+    sec_live_user_agent: str = typer.Option(
+        "OGREE/0.1 (research@ogree.local)",
+        help="SEC-required User-Agent for live SEC mode (used with --sec-live)",
+    ),
+    sec_live_timeout_s: int = typer.Option(
+        20,
+        help="HTTP timeout seconds for live SEC mode (used with --sec-live)",
+    ),
+    sec_live_universe_path: str = typer.Option(
+        "config/universe.yaml",
+        help="Universe path for live SEC mode (used with --sec-live)",
+    ),
 ) -> None:
-    """Run full pipeline: ingest all sources -> generate alerts -> report."""
+    """Run full pipeline: ingest fixture sources (+optional live SEC) -> alerts -> report."""
     typer.echo("=== Ingest: Demo ===")
     ingest_demo(path="sample_data/raw_events.jsonl")
 
@@ -202,6 +219,15 @@ def run_all(
 
     typer.echo("\n=== Ingest: SEC EDGAR ===")
     ingest_sec(path="sample_data/sec_edgar/form4_events.jsonl")
+
+    if sec_live:
+        typer.echo("\n=== Ingest: SEC EDGAR (live) ===")
+        ingest_sec_live(
+            max_filings_per_company=sec_live_max_filings_per_company,
+            user_agent=sec_live_user_agent,
+            timeout_s=sec_live_timeout_s,
+            universe_path=sec_live_universe_path,
+        )
 
     typer.echo("\n=== Generate Alerts ===")
     generate_alerts(hours=hours, top_n=top_n)

@@ -50,6 +50,12 @@ DATABASE_URL="postgresql://ogree:ogree@localhost:5432/ogree" python -m ogree_alp
 DATABASE_URL="postgresql://ogree:ogree@localhost:5432/ogree" python -m ogree_alpha ingest-sec-live --max-filings-per-company 20 --user-agent "OGREE/0.1 (you@example.com)"
 ```
 
+- Full pipeline with optional live SEC in one command:
+
+```bash
+DATABASE_URL="postgresql://ogree:ogree@localhost:5432/ogree" python -m ogree_alpha run-all --sec-live --sec-live-max-filings-per-company 20 --sec-live-user-agent "OGREE/0.1 (you@example.com)"
+```
+
 
 ## Notes / Known caveats
 

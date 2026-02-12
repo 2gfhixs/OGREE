@@ -1,0 +1,61 @@
+from __future__ import annotations
+
+from ogree_alpha import cli
+
+
+def test_run_all_default_does_not_call_live_sec(monkeypatch):
+    calls: list[str] = []
+
+    monkeypatch.setattr(cli, "ingest_demo", lambda **kwargs: calls.append("ingest_demo"))
+    monkeypatch.setattr(cli, "ingest_ak", lambda **kwargs: calls.append("ingest_ak"))
+    monkeypatch.setattr(cli, "ingest_tx", lambda **kwargs: calls.append("ingest_tx"))
+    monkeypatch.setattr(cli, "ingest_ree", lambda **kwargs: calls.append("ingest_ree"))
+    monkeypatch.setattr(cli, "ingest_sec", lambda **kwargs: calls.append("ingest_sec"))
+    monkeypatch.setattr(cli, "ingest_sec_live", lambda **kwargs: calls.append("ingest_sec_live"))
+    monkeypatch.setattr(cli, "generate_alerts", lambda **kwargs: calls.append("generate_alerts"))
+    monkeypatch.setattr(cli, "report", lambda **kwargs: calls.append("report"))
+    monkeypatch.setattr(cli, "opportunities", lambda **kwargs: calls.append("opportunities"))
+
+    cli.run_all(hours=72, report_hours=24, top_n=25, report_file=None)
+
+    assert "ingest_sec" in calls
+    assert "ingest_sec_live" not in calls
+    assert calls[-1] == "opportunities"
+
+
+def test_run_all_calls_live_sec_when_enabled(monkeypatch):
+    calls: list[tuple[str, dict]] = []
+
+    monkeypatch.setattr(cli, "ingest_demo", lambda **kwargs: calls.append(("ingest_demo", kwargs)))
+    monkeypatch.setattr(cli, "ingest_ak", lambda **kwargs: calls.append(("ingest_ak", kwargs)))
+    monkeypatch.setattr(cli, "ingest_tx", lambda **kwargs: calls.append(("ingest_tx", kwargs)))
+    monkeypatch.setattr(cli, "ingest_ree", lambda **kwargs: calls.append(("ingest_ree", kwargs)))
+    monkeypatch.setattr(cli, "ingest_sec", lambda **kwargs: calls.append(("ingest_sec", kwargs)))
+    monkeypatch.setattr(cli, "generate_alerts", lambda **kwargs: calls.append(("generate_alerts", kwargs)))
+    monkeypatch.setattr(cli, "report", lambda **kwargs: calls.append(("report", kwargs)))
+    monkeypatch.setattr(cli, "opportunities", lambda **kwargs: calls.append(("opportunities", kwargs)))
+
+    def _fake_ingest_sec_live(**kwargs):
+        calls.append(("ingest_sec_live", kwargs))
+
+    monkeypatch.setattr(cli, "ingest_sec_live", _fake_ingest_sec_live)
+
+    cli.run_all(
+        hours=48,
+        report_hours=12,
+        top_n=9,
+        report_file="out.json",
+        sec_live=True,
+        sec_live_max_filings_per_company=7,
+        sec_live_user_agent="OGREE Test (test@example.com)",
+        sec_live_timeout_s=33,
+        sec_live_universe_path="config/universe.yaml",
+    )
+
+    live_calls = [c for c in calls if c[0] == "ingest_sec_live"]
+    assert len(live_calls) == 1
+    _, kwargs = live_calls[0]
+    assert kwargs["max_filings_per_company"] == 7
+    assert kwargs["user_agent"] == "OGREE Test (test@example.com)"
+    assert kwargs["timeout_s"] == 33
+    assert kwargs["universe_path"] == "config/universe.yaml"
