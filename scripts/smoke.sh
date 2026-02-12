@@ -94,6 +94,19 @@ PYTHON_BIN="$(pick_python)" || fail "Python not found. Install Python 3.12+."
 log "Using Python: ${PYTHON_BIN}"
 
 if ! "${PYTHON_BIN}" -c "import alembic, pytest, sqlalchemy, typer, yaml, psycopg2" >/dev/null 2>&1; then
+  for fallback in python3 python; do
+    if command -v "${fallback}" >/dev/null 2>&1; then
+      FALLBACK_BIN="$(command -v "${fallback}")"
+      if [[ "${FALLBACK_BIN}" != "${PYTHON_BIN}" ]] && "${FALLBACK_BIN}" -c "import alembic, pytest, sqlalchemy, typer, yaml, psycopg2" >/dev/null 2>&1; then
+        log "Primary Python missing deps; falling back to: ${FALLBACK_BIN}"
+        PYTHON_BIN="${FALLBACK_BIN}"
+        break
+      fi
+    fi
+  done
+fi
+
+if ! "${PYTHON_BIN}" -c "import alembic, pytest, sqlalchemy, typer, yaml, psycopg2" >/dev/null 2>&1; then
   fail "Missing Python deps. Install with: python3 -m pip install --user pytest sqlalchemy alembic pydantic pydantic-settings typer pyyaml psycopg2-binary"
 fi
 
