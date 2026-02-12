@@ -82,6 +82,20 @@ def ingest_ree(
     typer.echo(f"REE/U: processed {processed}, inserted {inserted} new events")
 
 
+@app.command("ingest-sec")
+def ingest_sec(
+    path: str = typer.Option(
+        "sample_data/sec_edgar/form4_events.jsonl",
+        help="Path to SEC EDGAR fixture JSONL",
+    ),
+) -> None:
+    """Ingest SEC EDGAR insider/institutional fixture events into event_log."""
+    from ogree_alpha.adapters.sec_edgar import ingest_fixture_to_db
+
+    inserted, processed = ingest_fixture_to_db(path)
+    typer.echo(f"SEC EDGAR: processed {processed}, inserted {inserted} new events")
+
+
 @app.command("generate-alerts")
 def generate_alerts(
     hours: int = typer.Option(72, help="Lookback window in hours"),
@@ -145,6 +159,9 @@ def run_all(
 
     typer.echo("\n=== Ingest: REE/Uranium ===")
     ingest_ree(path="sample_data/ree_uranium/events.jsonl")
+
+    typer.echo("\n=== Ingest: SEC EDGAR ===")
+    ingest_sec(path="sample_data/sec_edgar/form4_events.jsonl")
 
     typer.echo("\n=== Generate Alerts ===")
     generate_alerts(hours=hours, top_n=top_n)

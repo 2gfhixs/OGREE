@@ -51,6 +51,53 @@ REE_U_RESOURCE_TYPES = {"resource_estimate"}
 REE_U_STUDY_TYPES = {"pea_published", "pfs_published", "feasibility_study"}
 REE_U_DEAL_TYPES = {"financing_closed", "financing_announced", "offtake_agreement"}
 REE_U_POLICY_TYPES = {"policy_designation"}
+INSIDER_BUY_TYPES = {"insider_buy"}
+
+
+def _coerce_utc(value: Any) -> datetime | None:
+    if not isinstance(value, datetime):
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _has_insider_buy_cluster(records: List[Dict[str, Any]], window_days: int = 30) -> bool:
+    """
+    Cluster is true when at least two distinct insiders buy in the same lineage
+    inside any rolling 30-day window.
+    """
+    points: List[tuple[datetime, str]] = []
+    for rec in records:
+        dt = _coerce_utc(rec.get("event_time"))
+        filer = str(rec.get("filer_name") or "").strip().lower()
+        if dt is None or not filer:
+            continue
+        points.append((dt, filer))
+
+    if len(points) < 2:
+        return False
+
+    points.sort(key=lambda x: x[0])
+    window = timedelta(days=window_days)
+    left = 0
+    filer_counts: Dict[str, int] = {}
+
+    for right in range(len(points)):
+        right_dt, right_filer = points[right]
+        filer_counts[right_filer] = filer_counts.get(right_filer, 0) + 1
+
+        while left <= right and (right_dt - points[left][0]) > window:
+            _, left_filer = points[left]
+            filer_counts[left_filer] = filer_counts.get(left_filer, 0) - 1
+            if filer_counts[left_filer] <= 0:
+                filer_counts.pop(left_filer, None)
+            left += 1
+
+        if len(filer_counts) >= 2:
+            return True
+
+    return False
 
 
 def compute_chain_scores(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -72,6 +119,8 @@ def compute_chain_scores(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         "has_study": False,
         "has_deal": False,
         "has_policy": False,
+        "has_insider_buy": False,
+        "has_insider_buy_cluster": False,
         "operator": None,
         "region": None,
         "permit_id": None,
@@ -80,8 +129,10 @@ def compute_chain_scores(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         "ip_boed": None,
         "commodity": None,
         "company": None,
+        "company_id": None,
         "project": None,
         "tickers": None,
+        "insider_buy_records": [],
         "last_event_time": None,
     })
 
@@ -104,6 +155,10 @@ def compute_chain_scores(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         b["permit_id"] = b["permit_id"] or pj.get("permit_id")
         b["field"] = b["field"] or pj.get("field")
         b["county"] = b["county"] or pj.get("county")
+        b["company"] = b["company"] or pj.get("company")
+        b["company_id"] = b["company_id"] or pj.get("company_id")
+        if not b["tickers"] and pj.get("tickers"):
+            b["tickers"] = pj.get("tickers")
         # carry best IP rate seen
         ip = pj.get("ip_boed")
         if ip is not None:
@@ -116,6 +171,15 @@ def compute_chain_scores(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
         t = pj.get("type")
         region = (pj.get("region") or "").strip()
+
+        if t in INSIDER_BUY_TYPES:
+            b["has_insider_buy"] = True
+            b["insider_buy_records"].append(
+                {
+                    "event_time": et,
+                    "filer_name": pj.get("filer_name"),
+                }
+            )
 
         # baseline AK-ish semantics
         if t == "permit_filed":
@@ -176,6 +240,11 @@ def compute_chain_scores(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             score += 0.15
         if b["has_policy"]:
             score += 0.1
+        if b["has_insider_buy"]:
+            score += 0.15
+        b["has_insider_buy_cluster"] = _has_insider_buy_cluster(b["insider_buy_records"], window_days=30)
+        if b["has_insider_buy_cluster"]:
+            score += 0.1
 
         rows_out.append(
             {
@@ -191,6 +260,8 @@ def compute_chain_scores(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 "has_study": bool(b["has_study"]),
                 "has_deal": bool(b["has_deal"]),
                 "has_policy": bool(b["has_policy"]),
+                "has_insider_buy": bool(b["has_insider_buy"]),
+                "has_insider_buy_cluster": bool(b["has_insider_buy_cluster"]),
                 "operator": b["operator"],
                 "region": b["region"],
                 "permit_id": b["permit_id"],
@@ -199,6 +270,7 @@ def compute_chain_scores(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 "ip_boed": b["ip_boed"],
                 "commodity": b["commodity"],
                 "company": b["company"],
+                "company_id": b["company_id"],
                 "project": b["project"],
                 "tickers": b["tickers"],
                 "last_event_time": b["last_event_time"],
