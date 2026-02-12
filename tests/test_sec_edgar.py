@@ -210,20 +210,36 @@ def test_iter_live_events_from_mocked_submissions(monkeypatch):
     </ownershipDocument>
     """
 
-    def _fake_http_get_json(url: str, *, user_agent: str, timeout_s: int = 20):
+    def _fake_http_get_json(
+        url: str,
+        *,
+        user_agent: str,
+        timeout_s: int = 20,
+        request_delay_s: float = 0.2,
+        max_retries: int = 3,
+        backoff_base_s: float = 1.0,
+    ):
         if url == SEC_TICKER_MAP_URL:
             return ticker_map
         if url == SEC_SUBMISSIONS_URL_TEMPLATE.format(cik="0000001024"):
             return submissions
         return {}
 
-    def _fake_http_get_text(url: str, *, user_agent: str, timeout_s: int = 20):
+    def _fake_http_get_text(
+        url: str,
+        *,
+        user_agent: str,
+        timeout_s: int = 20,
+        request_delay_s: float = 0.2,
+        max_retries: int = 3,
+        backoff_base_s: float = 1.0,
+    ):
         if "doc1.xml" in url:
             return form4_xml
         return ""
 
-    monkeypatch.setattr(sec_edgar, "_http_get_json", _fake_http_get_json)
-    monkeypatch.setattr(sec_edgar, "_http_get_text", _fake_http_get_text)
+    monkeypatch.setattr(sec_edgar, "_http_get_json_with_retry", _fake_http_get_json)
+    monkeypatch.setattr(sec_edgar, "_http_get_text_with_retry", _fake_http_get_text)
 
     stats = {}
     out = list(
@@ -265,15 +281,23 @@ def test_iter_live_events_tracks_skipped_form4(monkeypatch):
         }
     }
 
-    def _fake_http_get_json(url: str, *, user_agent: str, timeout_s: int = 20):
+    def _fake_http_get_json(
+        url: str,
+        *,
+        user_agent: str,
+        timeout_s: int = 20,
+        request_delay_s: float = 0.2,
+        max_retries: int = 3,
+        backoff_base_s: float = 1.0,
+    ):
         if url == SEC_TICKER_MAP_URL:
             return ticker_map
         if url == SEC_SUBMISSIONS_URL_TEMPLATE.format(cik="0000001024"):
             return submissions
         return {}
 
-    monkeypatch.setattr(sec_edgar, "_http_get_json", _fake_http_get_json)
-    monkeypatch.setattr(sec_edgar, "_http_get_text", lambda *args, **kwargs: "")
+    monkeypatch.setattr(sec_edgar, "_http_get_json_with_retry", _fake_http_get_json)
+    monkeypatch.setattr(sec_edgar, "_http_get_text_with_retry", lambda *args, **kwargs: "")
 
     stats = {}
     out = list(
@@ -296,11 +320,19 @@ def test_load_ticker_map_cached_per_run(monkeypatch):
 
     calls = {"n": 0}
 
-    def _fake_http_get_json(url: str, *, user_agent: str, timeout_s: int = 20):
+    def _fake_http_get_json(
+        url: str,
+        *,
+        user_agent: str,
+        timeout_s: int = 20,
+        request_delay_s: float = 0.2,
+        max_retries: int = 3,
+        backoff_base_s: float = 1.0,
+    ):
         calls["n"] += 1
         return {"0": {"cik_str": 1024, "ticker": "PR"}}
 
-    monkeypatch.setattr(sec_edgar, "_http_get_json", _fake_http_get_json)
+    monkeypatch.setattr(sec_edgar, "_http_get_json_with_retry", _fake_http_get_json)
 
     cache = {}
     m1 = _load_ticker_to_cik_map(user_agent="UA", timeout_s=1, run_cache=cache)

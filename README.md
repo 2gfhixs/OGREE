@@ -52,6 +52,12 @@ DATABASE_URL="postgresql://ogree:ogree@localhost:5432/ogree" python -m ogree_alp
 
 `ingest-sec-live` prints Form 4 safety metrics: filings seen/parsed/skipped and total transactions emitted.
 
+You can tune SEC request safety knobs when needed:
+
+```bash
+DATABASE_URL="postgresql://ogree:ogree@localhost:5432/ogree" python -m ogree_alpha ingest-sec-live --request-delay-s 0.25 --max-retries 4 --backoff-base-s 1.5 --user-agent "OGREE/0.1 (you@example.com)"
+```
+
 - Full pipeline with optional live SEC in one command:
 
 ```bash

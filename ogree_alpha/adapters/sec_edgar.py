@@ -185,6 +185,29 @@ def _normalize_ticker_symbol(value: Any) -> str | None:
 
 def _http_get_json(url: str, *, user_agent: str, timeout_s: int = 20) -> Dict[str, Any]:
     global _LAST_HTTP_REQUEST_TS
+    request_delay_s: float = DEFAULT_REQUEST_DELAY_S
+    max_retries: int = DEFAULT_MAX_RETRIES
+    backoff_base_s: float = DEFAULT_BACKOFF_S
+    return _http_get_json_with_retry(
+        url,
+        user_agent=user_agent,
+        timeout_s=timeout_s,
+        request_delay_s=request_delay_s,
+        max_retries=max_retries,
+        backoff_base_s=backoff_base_s,
+    )
+
+
+def _http_get_json_with_retry(
+    url: str,
+    *,
+    user_agent: str,
+    timeout_s: int = 20,
+    request_delay_s: float = DEFAULT_REQUEST_DELAY_S,
+    max_retries: int = DEFAULT_MAX_RETRIES,
+    backoff_base_s: float = DEFAULT_BACKOFF_S,
+) -> Dict[str, Any]:
+    global _LAST_HTTP_REQUEST_TS
     req = request.Request(
         url,
         headers={
@@ -192,11 +215,11 @@ def _http_get_json(url: str, *, user_agent: str, timeout_s: int = 20) -> Dict[st
             "Accept": "application/json",
         },
     )
-    for attempt in range(DEFAULT_MAX_RETRIES + 1):
+    for attempt in range(max_retries + 1):
         now = time.monotonic()
         elapsed = now - _LAST_HTTP_REQUEST_TS
-        if elapsed < DEFAULT_REQUEST_DELAY_S:
-            time.sleep(DEFAULT_REQUEST_DELAY_S - elapsed)
+        if elapsed < request_delay_s:
+            time.sleep(request_delay_s - elapsed)
         _LAST_HTTP_REQUEST_TS = time.monotonic()
 
         try:
@@ -204,19 +227,41 @@ def _http_get_json(url: str, *, user_agent: str, timeout_s: int = 20) -> Dict[st
                 data = resp.read().decode("utf-8")
                 return json.loads(data)
         except HTTPError as e:
-            if e.code in _RETRYABLE_HTTP_STATUS and attempt < DEFAULT_MAX_RETRIES:
-                time.sleep(DEFAULT_BACKOFF_S * (2 ** attempt))
+            if e.code in _RETRYABLE_HTTP_STATUS and attempt < max_retries:
+                time.sleep(backoff_base_s * (2 ** attempt))
                 continue
             return {}
         except (URLError, TimeoutError, json.JSONDecodeError):
-            if attempt < DEFAULT_MAX_RETRIES:
-                time.sleep(DEFAULT_BACKOFF_S * (2 ** attempt))
+            if attempt < max_retries:
+                time.sleep(backoff_base_s * (2 ** attempt))
                 continue
             return {}
     return {}
 
 
 def _http_get_text(url: str, *, user_agent: str, timeout_s: int = 20) -> str:
+    request_delay_s: float = DEFAULT_REQUEST_DELAY_S
+    max_retries: int = DEFAULT_MAX_RETRIES
+    backoff_base_s: float = DEFAULT_BACKOFF_S
+    return _http_get_text_with_retry(
+        url,
+        user_agent=user_agent,
+        timeout_s=timeout_s,
+        request_delay_s=request_delay_s,
+        max_retries=max_retries,
+        backoff_base_s=backoff_base_s,
+    )
+
+
+def _http_get_text_with_retry(
+    url: str,
+    *,
+    user_agent: str,
+    timeout_s: int = 20,
+    request_delay_s: float = DEFAULT_REQUEST_DELAY_S,
+    max_retries: int = DEFAULT_MAX_RETRIES,
+    backoff_base_s: float = DEFAULT_BACKOFF_S,
+) -> str:
     global _LAST_HTTP_REQUEST_TS
     req = request.Request(
         url,
@@ -225,11 +270,11 @@ def _http_get_text(url: str, *, user_agent: str, timeout_s: int = 20) -> str:
             "Accept": "text/plain,application/xml,application/xhtml+xml,*/*",
         },
     )
-    for attempt in range(DEFAULT_MAX_RETRIES + 1):
+    for attempt in range(max_retries + 1):
         now = time.monotonic()
         elapsed = now - _LAST_HTTP_REQUEST_TS
-        if elapsed < DEFAULT_REQUEST_DELAY_S:
-            time.sleep(DEFAULT_REQUEST_DELAY_S - elapsed)
+        if elapsed < request_delay_s:
+            time.sleep(request_delay_s - elapsed)
         _LAST_HTTP_REQUEST_TS = time.monotonic()
 
         try:
@@ -241,13 +286,13 @@ def _http_get_text(url: str, *, user_agent: str, timeout_s: int = 20) -> str:
                 except Exception:
                     return raw.decode("utf-8", errors="replace")
         except HTTPError as e:
-            if e.code in _RETRYABLE_HTTP_STATUS and attempt < DEFAULT_MAX_RETRIES:
-                time.sleep(DEFAULT_BACKOFF_S * (2 ** attempt))
+            if e.code in _RETRYABLE_HTTP_STATUS and attempt < max_retries:
+                time.sleep(backoff_base_s * (2 ** attempt))
                 continue
             return ""
         except (URLError, TimeoutError):
-            if attempt < DEFAULT_MAX_RETRIES:
-                time.sleep(DEFAULT_BACKOFF_S * (2 ** attempt))
+            if attempt < max_retries:
+                time.sleep(backoff_base_s * (2 ** attempt))
                 continue
             return ""
     return ""
@@ -270,6 +315,9 @@ def _load_ticker_to_cik_map(
     *,
     user_agent: str,
     timeout_s: int = 20,
+    request_delay_s: float = DEFAULT_REQUEST_DELAY_S,
+    max_retries: int = DEFAULT_MAX_RETRIES,
+    backoff_base_s: float = DEFAULT_BACKOFF_S,
     run_cache: MutableMapping[str, Any] | None = None,
 ) -> Dict[str, str]:
     if run_cache is not None and "ticker_to_cik" in run_cache:
@@ -277,7 +325,14 @@ def _load_ticker_to_cik_map(
         if isinstance(cached, dict):
             return dict(cached)
 
-    payload = _http_get_json(SEC_TICKER_MAP_URL, user_agent=user_agent, timeout_s=timeout_s)
+    payload = _http_get_json_with_retry(
+        SEC_TICKER_MAP_URL,
+        user_agent=user_agent,
+        timeout_s=timeout_s,
+        request_delay_s=request_delay_s,
+        max_retries=max_retries,
+        backoff_base_s=backoff_base_s,
+    )
     rows: Iterable[Any]
     if isinstance(payload, dict):
         rows = payload.values()
@@ -501,6 +556,9 @@ def iter_live_events(
     user_agent: str = DEFAULT_USER_AGENT,
     max_filings_per_company: int = 20,
     timeout_s: int = 20,
+    request_delay_s: float = DEFAULT_REQUEST_DELAY_S,
+    max_retries: int = DEFAULT_MAX_RETRIES,
+    backoff_base_s: float = DEFAULT_BACKOFF_S,
     stats: MutableMapping[str, int] | None = None,
 ) -> Iterable[Dict[str, Any]]:
     if stats is not None:
@@ -513,6 +571,9 @@ def iter_live_events(
     ticker_to_cik = _load_ticker_to_cik_map(
         user_agent=user_agent,
         timeout_s=timeout_s,
+        request_delay_s=request_delay_s,
+        max_retries=max_retries,
+        backoff_base_s=backoff_base_s,
         run_cache=run_cache,
     )
     if not ticker_to_cik:
@@ -541,7 +602,14 @@ def iter_live_events(
             continue
 
         submissions_url = SEC_SUBMISSIONS_URL_TEMPLATE.format(cik=cik_10)
-        sub = _http_get_json(submissions_url, user_agent=user_agent, timeout_s=timeout_s)
+        sub = _http_get_json_with_retry(
+            submissions_url,
+            user_agent=user_agent,
+            timeout_s=timeout_s,
+            request_delay_s=request_delay_s,
+            max_retries=max_retries,
+            backoff_base_s=backoff_base_s,
+        )
         recent = ((sub.get("filings") or {}).get("recent") or {}) if isinstance(sub, dict) else {}
         forms = recent.get("form") if isinstance(recent, Mapping) else None
         if not isinstance(forms, list):
@@ -567,13 +635,31 @@ def iter_live_events(
             if event_type == "form4":
                 if stats is not None:
                     stats["form4_filings_seen"] = stats.get("form4_filings_seen", 0) + 1
-                text = _http_get_text(filing_url, user_agent=user_agent, timeout_s=timeout_s) if filing_url else ""
+                text = (
+                    _http_get_text_with_retry(
+                        filing_url,
+                        user_agent=user_agent,
+                        timeout_s=timeout_s,
+                        request_delay_s=request_delay_s,
+                        max_retries=max_retries,
+                        backoff_base_s=backoff_base_s,
+                    )
+                    if filing_url
+                    else ""
+                )
                 tx_rows = parse_form4_transactions(text)
                 if not tx_rows:
                     txt_url = _build_filing_txt_url(cik_10, accession)
                     if txt_url:
                         tx_rows = parse_form4_transactions(
-                            _http_get_text(txt_url, user_agent=user_agent, timeout_s=timeout_s)
+                            _http_get_text_with_retry(
+                                txt_url,
+                                user_agent=user_agent,
+                                timeout_s=timeout_s,
+                                request_delay_s=request_delay_s,
+                                max_retries=max_retries,
+                                backoff_base_s=backoff_base_s,
+                            )
                         )
 
                 tx_emitted = 0
@@ -733,12 +819,18 @@ def ingest_live_to_db(
     user_agent: str = DEFAULT_USER_AGENT,
     max_filings_per_company: int = 20,
     timeout_s: int = 20,
+    request_delay_s: float = DEFAULT_REQUEST_DELAY_S,
+    max_retries: int = DEFAULT_MAX_RETRIES,
+    backoff_base_s: float = DEFAULT_BACKOFF_S,
 ) -> Tuple[int, int]:
     inserted, processed, _stats = ingest_live_to_db_with_stats(
         universe_path=universe_path,
         user_agent=user_agent,
         max_filings_per_company=max_filings_per_company,
         timeout_s=timeout_s,
+        request_delay_s=request_delay_s,
+        max_retries=max_retries,
+        backoff_base_s=backoff_base_s,
     )
     return inserted, processed
 
@@ -749,6 +841,9 @@ def ingest_live_to_db_with_stats(
     user_agent: str = DEFAULT_USER_AGENT,
     max_filings_per_company: int = 20,
     timeout_s: int = 20,
+    request_delay_s: float = DEFAULT_REQUEST_DELAY_S,
+    max_retries: int = DEFAULT_MAX_RETRIES,
+    backoff_base_s: float = DEFAULT_BACKOFF_S,
 ) -> Tuple[int, int, Dict[str, int]]:
     inserted = 0
     processed = 0
@@ -765,6 +860,9 @@ def ingest_live_to_db_with_stats(
         user_agent=user_agent,
         max_filings_per_company=max_filings_per_company,
         timeout_s=timeout_s,
+        request_delay_s=request_delay_s,
+        max_retries=max_retries,
+        backoff_base_s=backoff_base_s,
         stats=stats,
     ):
         processed += 1

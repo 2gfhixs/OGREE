@@ -104,6 +104,9 @@ def ingest_sec_live(
         help="SEC-required User-Agent header",
     ),
     timeout_s: int = typer.Option(20, help="HTTP timeout in seconds"),
+    request_delay_s: float = typer.Option(0.2, help="Delay between SEC HTTP requests (seconds)"),
+    max_retries: int = typer.Option(3, help="Max retries for retryable SEC HTTP errors"),
+    backoff_base_s: float = typer.Option(1.0, help="Base backoff seconds for SEC HTTP retries"),
     universe_path: str = typer.Option("config/universe.yaml", help="Path to universe YAML"),
 ) -> None:
     """Ingest recent SEC EDGAR filings from SEC submissions endpoints."""
@@ -114,6 +117,9 @@ def ingest_sec_live(
         user_agent=user_agent,
         max_filings_per_company=max_filings_per_company,
         timeout_s=timeout_s,
+        request_delay_s=request_delay_s,
+        max_retries=max_retries,
+        backoff_base_s=backoff_base_s,
     )
     typer.echo(f"SEC EDGAR live: processed {processed}, inserted {inserted} new events")
     typer.echo(
@@ -207,6 +213,18 @@ def run_all(
         20,
         help="HTTP timeout seconds for live SEC mode (used with --sec-live)",
     ),
+    sec_live_request_delay_s: float = typer.Option(
+        0.2,
+        help="Delay between SEC live HTTP requests seconds (used with --sec-live)",
+    ),
+    sec_live_max_retries: int = typer.Option(
+        3,
+        help="Max retry attempts for SEC live HTTP errors (used with --sec-live)",
+    ),
+    sec_live_backoff_base_s: float = typer.Option(
+        1.0,
+        help="Base backoff seconds for SEC live retries (used with --sec-live)",
+    ),
     sec_live_universe_path: str = typer.Option(
         "config/universe.yaml",
         help="Universe path for live SEC mode (used with --sec-live)",
@@ -236,6 +254,9 @@ def run_all(
             max_filings_per_company=sec_live_max_filings_per_company,
             user_agent=sec_live_user_agent,
             timeout_s=sec_live_timeout_s,
+            request_delay_s=sec_live_request_delay_s,
+            max_retries=sec_live_max_retries,
+            backoff_base_s=sec_live_backoff_base_s,
             universe_path=sec_live_universe_path,
         )
 

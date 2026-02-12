@@ -49,6 +49,9 @@ def test_run_all_calls_live_sec_when_enabled(monkeypatch):
         sec_live_max_filings_per_company=7,
         sec_live_user_agent="OGREE Test (test@example.com)",
         sec_live_timeout_s=33,
+        sec_live_request_delay_s=0.45,
+        sec_live_max_retries=5,
+        sec_live_backoff_base_s=1.25,
         sec_live_universe_path="config/universe.yaml",
     )
 
@@ -58,4 +61,7 @@ def test_run_all_calls_live_sec_when_enabled(monkeypatch):
     assert kwargs["max_filings_per_company"] == 7
     assert kwargs["user_agent"] == "OGREE Test (test@example.com)"
     assert kwargs["timeout_s"] == 33
+    assert kwargs["request_delay_s"] == 0.45
+    assert kwargs["max_retries"] == 5
+    assert kwargs["backoff_base_s"] == 1.25
     assert kwargs["universe_path"] == "config/universe.yaml"
