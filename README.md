@@ -4,6 +4,94 @@ Exploration Alpha (Track A): event-driven research engine for oil/gas + REE/uran
 
 See `SPEC.md` for the full system specification.
 
+## Demo docs
+
+- `docs/DEMO_REPORT_SAMPLE.md` - sample report artifact for team demos
+- `docs/OGREE_TOOL_SUMMARY.md` - current feature/architecture summary
+- `docs/MILESTONES_NEXT_STEPS.md` - milestone roadmap and immediate next steps
+
+
+## Smoke test
+
+Run a full local E2E smoke (DB + migrations + pipeline + tests):
+
+```bash
+make smoke
+```
+
+What `make smoke` does:
+- Preflights Python + required packages
+- Preflights `docker-compose` or `docker compose`
+- Starts Postgres from `docker-compose.yml`
+- Waits for `localhost:5432` readiness
+- Runs `alembic upgrade head`
+- Runs `python -m ogree_alpha db-check`
+- Runs `python -m ogree_alpha run-all`
+- Runs `pytest tests/ -v`
+
+You can override the default DB URL:
+
+```bash
+DATABASE_URL="postgresql://ogree:ogree@localhost:5432/ogree" make smoke
+```
+
+If you already have a reachable Postgres (local or remote) and want to skip Docker orchestration:
+
+```bash
+SMOKE_SKIP_DOCKER=1 DATABASE_URL="postgresql://user:pass@host:5432/dbname" make smoke
+```
+
+
+## Useful CLI commands
+
+- Ingest policy agents (fixture mode):
+
+```bash
+DATABASE_URL="postgresql://ogree:ogree@localhost:5432/ogree" python -m ogree_alpha ingest-fed-rules
+DATABASE_URL="postgresql://ogree:ogree@localhost:5432/ogree" python -m ogree_alpha ingest-policy
+```
+
+- Pipeline health snapshot:
+
+```bash
+DATABASE_URL="postgresql://ogree:ogree@localhost:5432/ogree" python -m ogree_alpha health --hours 72 --alert-hours 24
+```
+
+- Live SEC EDGAR pull (submissions feed):
+
+```bash
+DATABASE_URL="postgresql://ogree:ogree@localhost:5432/ogree" python -m ogree_alpha ingest-sec-live --max-filings-per-company 20 --user-agent "OGREE/0.1 (you@example.com)"
+```
+
+`ingest-sec-live` prints Form 4 safety metrics: filings seen/parsed/skipped and total transactions emitted.
+
+You can tune SEC request safety knobs when needed:
+
+```bash
+DATABASE_URL="postgresql://ogree:ogree@localhost:5432/ogree" python -m ogree_alpha ingest-sec-live --request-delay-s 0.25 --max-retries 4 --backoff-base-s 1.5 --user-agent "OGREE/0.1 (you@example.com)"
+```
+
+Validation guardrails:
+- `max-filings-per-company`: 1..500
+- `timeout-s`: 1..300
+- `request-delay-s`: 0.0..10.0
+- `max-retries`: 0..10
+- `backoff-base-s`: 0.0..120.0
+
+- Full pipeline with optional live SEC in one command:
+
+```bash
+DATABASE_URL="postgresql://ogree:ogree@localhost:5432/ogree" python -m ogree_alpha run-all --sec-live --sec-live-max-filings-per-company 20 --sec-live-user-agent "OGREE/0.1 (you@example.com)"
+```
+
+- Export demo-ready email report (`.eml`) and optionally send:
+
+```bash
+DATABASE_URL="postgresql://ogree:ogree@localhost:5432/ogree" python -m ogree_alpha email-report --to "team@example.com" --output output/demo_report.eml
+# optional send:
+# python -m ogree_alpha email-report --to "team@example.com" --send --smtp-host smtp.example.com --smtp-user user --smtp-password pass
+```
+
 
 ## Notes / Known caveats
 

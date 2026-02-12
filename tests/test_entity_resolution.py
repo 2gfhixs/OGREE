@@ -2,21 +2,21 @@ from ogree_alpha.entity_resolution import resolve_company
 
 
 def test_resolve_by_exact_name():
-    r = resolve_company(name="Frontier Rare Earths Ltd")
-    assert r.company_id == "FRONTIER_REE"
-    assert "FRE.V" in r.tickers
+    r = resolve_company(name="Ucore Rare Metals Inc.")
+    assert r.company_id == "UCORE_RARE_METALS"
+    assert "UCU.V" in r.tickers
     assert r.method == "alias"
     assert r.confidence > 0.5
 
 
 def test_resolve_by_alias():
-    r = resolve_company(name="Permian Basin Resources")
-    assert r.company_id == "PERMIAN_BASIN_RES"
+    r = resolve_company(name="Permian Resources Corp")
+    assert r.company_id == "PERMIAN_RESOURCES"
 
 
 def test_resolve_by_operator():
-    r = resolve_company(operator="Eagle Ford Energy LLC")
-    assert r.company_id == "EAGLE_FORD_ENERGY"
+    r = resolve_company(operator="Comstock Resources, Inc.")
+    assert r.company_id == "COMSTOCK_RESOURCES"
 
 
 def test_resolve_unknown_returns_none():

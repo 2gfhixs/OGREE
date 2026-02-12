@@ -66,7 +66,11 @@ def render_report(hours: int = 24, top_n: int = 10) -> Dict[str, Any]:
     subject = f"OGREE Alpha — Top Alerts — {today}"
 
     # Phase 7: Opportunities section
-    opps = rank_opportunities(hours=max(hours, 24), top_n=top_n)
+    try:
+        opps = rank_opportunities(hours=max(hours, 24), top_n=top_n)
+    except RuntimeError:
+        # Allow report rendering in offline/test mode when DATABASE_URL is unset.
+        opps = []
     opps_table = render_opps_text(opps)
     opps_text = "Top Opportunities\n" + opps_table + "\n\n"
     opps_html = "<h2>Top Opportunities</h2><pre>" + _escape_html(opps_table) + "</pre>"

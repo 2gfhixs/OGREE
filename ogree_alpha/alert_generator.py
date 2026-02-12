@@ -45,6 +45,7 @@ def build_alert(row: Dict[str, Any], utc_date: str, company_id: str | None = Non
         "lineage_id": lineage_id,
         "permit_id": row.get("permit_id"),
         "operator": row.get("operator"),
+        "company": row.get("company"),
         "region": row.get("region"),
         "last_event_time": last_event_time_iso,
     }
@@ -55,13 +56,21 @@ def build_alert(row: Dict[str, Any], utc_date: str, company_id: str | None = Non
         "has_spud": bool(row.get("has_spud")),
         "has_well": bool(row.get("has_well")),
         "has_production": bool(row.get("has_production")),
+        "has_insider_buy": bool(row.get("has_insider_buy")),
+        "has_insider_buy_cluster": bool(row.get("has_insider_buy_cluster")),
+        "convergence_score": int(row.get("convergence_score") or 0),
+        "convergence_categories": list(row.get("convergence_categories") or []),
     }
 
+    actor = row.get("operator") or row.get("company") or "unknown"
     summary = (
         f"[{tier.upper()}] chain progression "
-        f"{row.get('permit_id') or lineage_id} ({row.get('operator')}, {row.get('region')}) "
+        f"{row.get('permit_id') or lineage_id} ({actor}, {row.get('region')}) "
         f"score={score_summary['score']}"
     )
+    if score_summary["convergence_score"] >= 3:
+        categories_text = ",".join(score_summary["convergence_categories"])
+        summary += f" convergence={score_summary['convergence_score']} [{categories_text}]"
 
     # Ensure JSONB field doesn't contain datetime objects
     row_safe = dict(row)
@@ -91,10 +100,11 @@ def generate_and_insert_alerts(hours: int = 72, top_n: int = 25) -> int:
     utc_date = _now_utc().date().isoformat()
     inserted = 0
     for r in rows:
-        # Phase 8: resolve company identity from chain score fields
-        operator = r.get('operator')
-        resolved = resolve_company(operator=operator)
-        company_id = resolved.company_id
+        # Prefer adapter-provided company_id; otherwise resolve from chain fields.
+        company_id = r.get("company_id")
+        if company_id is None:
+            resolved = resolve_company(name=r.get("company"), operator=r.get("operator"))
+            company_id = resolved.company_id
         tier = tier_for_score(float(r["score"]))
         if not tier:
             continue

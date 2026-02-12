@@ -3,14 +3,14 @@
   "items": [
     {
       "permit_id": "AK-P-0001",
-      "operator": "Placeholder Co",
+      "operator": "Pantheon Resources plc",
       "region": "North Slope",
       "activity": "Exploratory well permit filed",
       "event_time": "2026-02-07T01:00:00Z"
     },
     {
       "permit_id": "AK-P-0002",
-      "operator": "Placeholder Co",
+      "operator": "Pantheon Resources plc",
       "region": "Cook Inlet",
       "activity": "Workover permit filed",
       "event_time": "2026-02-07T01:10:00Z"

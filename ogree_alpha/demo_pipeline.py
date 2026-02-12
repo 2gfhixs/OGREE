@@ -4,6 +4,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional
 
+from ogree_alpha.entity_resolution import resolve_company
 from ogree_alpha.hashing import alert_id as make_alert_id
 from ogree_alpha.hashing import canonical_doc_id as make_canonical_doc_id
 from ogree_alpha.hashing import content_hash as make_content_hash
@@ -59,6 +60,10 @@ def build_alert(raw_event_db: Dict[str, Any]) -> Dict[str, Any]:
     score = score_event(payload)
     tier = tier_from_score(score)
     etype = event_type(payload)
+    resolved = resolve_company(
+        name=payload.get("company") or payload.get("lessee"),
+        operator=payload.get("operator"),
+    )
 
     canon = raw_event_db["canonical_doc_id"]
     aid = make_alert_id(canon, tier=tier, event_type=etype)
@@ -72,7 +77,7 @@ def build_alert(raw_event_db: Dict[str, Any]) -> Dict[str, Any]:
         "event_type": etype,
         "event_time": raw_event_db.get("event_time"),
         "ingest_time": raw_event_db.get("ingest_time"),
-        "company_id": "COMPANY_1",
+        "company_id": resolved.company_id,
         "asset_id": None,
         "canonical_doc_id": canon,
         "evidence_pointer": {
