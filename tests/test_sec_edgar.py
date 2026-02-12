@@ -7,6 +7,9 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from ogree_alpha.adapters.sec_edgar import (
+    SEC_SUBMISSIONS_URL_TEMPLATE,
+    SEC_TICKER_MAP_URL,
+    _classify_form_event_type,
     _canonicalize_payload,
     _derive_lineage_id,
     _normalize_relationship,
@@ -45,6 +48,14 @@ def test_derive_lineage_prefers_company_id():
     assert _derive_lineage_id(payload) == "SEC:PERMIAN_RESOURCES"
 
 
+def test_classify_form_event_type():
+    assert _classify_form_event_type("4") == "insider_buy"
+    assert _classify_form_event_type("4/A") == "insider_buy"
+    assert _classify_form_event_type("SC 13G") == "institutional_13g"
+    assert _classify_form_event_type("13F-HR") == "institutional_13f"
+    assert _classify_form_event_type("8-K") is None
+
+
 def test_canonicalize_payload_resolves_company_and_computes_total():
     payload = _canonicalize_payload(
         {
@@ -62,6 +73,50 @@ def test_canonicalize_payload_resolves_company_and_computes_total():
     assert payload["transaction_type"] == "purchase"
     assert payload["total_value"] == 126000.0
     assert payload["tickers"] == ["PR"]
+
+
+def test_iter_live_events_from_mocked_submissions(monkeypatch):
+    from ogree_alpha.adapters import sec_edgar
+
+    ticker_map = {
+        "0": {"cik_str": 1024, "ticker": "PR", "title": "Permian Resources Corporation"},
+    }
+    submissions = {
+        "filings": {
+            "recent": {
+                "form": ["4", "SC 13G", "8-K"],
+                "accessionNumber": [
+                    "0001024-26-000001",
+                    "0001024-26-000002",
+                    "0001024-26-000003",
+                ],
+                "filingDate": ["2026-02-01", "2026-02-05", "2026-02-10"],
+                "primaryDocument": ["xslF345X03/doc1.xml", "doc2.txt", "doc3.htm"],
+            }
+        }
+    }
+
+    def _fake_http_get_json(url: str, *, user_agent: str, timeout_s: int = 20):
+        if url == SEC_TICKER_MAP_URL:
+            return ticker_map
+        if url == SEC_SUBMISSIONS_URL_TEMPLATE.format(cik="0000001024"):
+            return submissions
+        return {}
+
+    monkeypatch.setattr(sec_edgar, "_http_get_json", _fake_http_get_json)
+
+    out = list(
+        sec_edgar.iter_live_events(
+            user_agent="OGREE Test (test@example.com)",
+            max_filings_per_company=10,
+            timeout_s=1,
+        )
+    )
+    assert len(out) == 2
+    types = [o.get("payload_json", {}).get("type") for o in out]
+    assert "insider_buy" in types
+    assert "institutional_13g" in types
+    assert all(o.get("source_event_id", "").startswith("sec_live_") for o in out)
 
 
 def test_parse_dt_formats():

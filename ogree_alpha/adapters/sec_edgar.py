@@ -4,13 +4,19 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Tuple
+from urllib import request
+from urllib.error import HTTPError, URLError
 
 from ogree_alpha.db.repo import insert_raw_event
 from ogree_alpha.entity_resolution import resolve_company
 from ogree_alpha.hashing import sha256_hex
+from ogree_alpha.universe import load_universe
 
 
 SOURCE_SYSTEM = "sec_edgar"
+SEC_TICKER_MAP_URL = "https://www.sec.gov/files/company_tickers.json"
+SEC_SUBMISSIONS_URL_TEMPLATE = "https://data.sec.gov/submissions/CIK{cik}.json"
+DEFAULT_USER_AGENT = "OGREE/0.1 (research@ogree.local)"
 
 VALID_TYPES = {
     "insider_buy",
@@ -154,6 +160,88 @@ def _normalize_tickers(raw: Any) -> list[str]:
     return []
 
 
+def _normalize_ticker_symbol(value: Any) -> str | None:
+    s = _clean_str(value)
+    if not s:
+        return None
+    s = s.upper()
+    if ":" in s:
+        s = s.split(":", 1)[1]
+    if "." in s:
+        s = s.split(".", 1)[0]
+    if "-" in s:
+        s = s.split("-", 1)[0]
+    s = "".join(ch for ch in s if ch.isalnum())
+    return s or None
+
+
+def _http_get_json(url: str, *, user_agent: str, timeout_s: int = 20) -> Dict[str, Any]:
+    req = request.Request(
+        url,
+        headers={
+            "User-Agent": user_agent,
+            "Accept": "application/json",
+        },
+    )
+    try:
+        with request.urlopen(req, timeout=timeout_s) as resp:
+            data = resp.read().decode("utf-8")
+            return json.loads(data)
+    except (HTTPError, URLError, TimeoutError, json.JSONDecodeError):
+        return {}
+
+
+def _classify_form_event_type(form: Any) -> str | None:
+    key = str(form or "").strip().upper()
+    if not key:
+        return None
+    if key in {"4", "4/A"}:
+        return "insider_buy"
+    if key in {"SC 13G", "SC 13G/A", "13G", "13G/A"}:
+        return "institutional_13g"
+    if key in {"13F-HR", "13F-HR/A"}:
+        return "institutional_13f"
+    return None
+
+
+def _load_ticker_to_cik_map(*, user_agent: str, timeout_s: int = 20) -> Dict[str, str]:
+    payload = _http_get_json(SEC_TICKER_MAP_URL, user_agent=user_agent, timeout_s=timeout_s)
+    rows: Iterable[Any]
+    if isinstance(payload, dict):
+        rows = payload.values()
+    elif isinstance(payload, list):
+        rows = payload
+    else:
+        rows = []
+
+    out: Dict[str, str] = {}
+    for row in rows:
+        if not isinstance(row, Mapping):
+            continue
+        ticker = _normalize_ticker_symbol(row.get("ticker"))
+        cik = row.get("cik_str")
+        if ticker and cik is not None:
+            out[ticker] = str(cik).strip().zfill(10)
+    return out
+
+
+def _recent_value(recent: Mapping[str, Any], key: str, idx: int) -> Any:
+    values = recent.get(key)
+    if isinstance(values, list) and idx < len(values):
+        return values[idx]
+    return None
+
+
+def _build_filing_url(cik_10: str, accession: str | None, primary_document: str | None) -> str | None:
+    if not accession:
+        return None
+    accession_clean = accession.replace("-", "")
+    doc = str(primary_document or "").strip()
+    if not doc:
+        return None
+    return f"https://www.sec.gov/Archives/edgar/data/{int(cik_10)}/{accession_clean}/{doc}"
+
+
 def _derive_lineage_id(payload: Mapping[str, Any]) -> str | None:
     company_id = _clean_str(payload.get("company_id"))
     if company_id:
@@ -198,6 +286,86 @@ def _canonicalize_payload(payload: Mapping[str, Any]) -> Dict[str, Any]:
         p["lineage_id"] = lineage_id
 
     return p
+
+
+def iter_live_events(
+    *,
+    universe_path: str = "config/universe.yaml",
+    user_agent: str = DEFAULT_USER_AGENT,
+    max_filings_per_company: int = 20,
+    timeout_s: int = 20,
+) -> Iterable[Dict[str, Any]]:
+    ticker_to_cik = _load_ticker_to_cik_map(user_agent=user_agent, timeout_s=timeout_s)
+    if not ticker_to_cik:
+        return
+
+    universe = load_universe(universe_path)
+    for company in universe.companies:
+        name = _clean_str(company.get("name"))
+        if not name:
+            continue
+        raw_tickers = company.get("tickers") or []
+        normalized_tickers = [
+            _normalize_ticker_symbol(t)
+            for t in raw_tickers
+            if _normalize_ticker_symbol(t)
+        ]
+        if not normalized_tickers:
+            continue
+
+        cik_10 = None
+        for ticker in normalized_tickers:
+            if ticker in ticker_to_cik:
+                cik_10 = ticker_to_cik[ticker]
+                break
+        if not cik_10:
+            continue
+
+        submissions_url = SEC_SUBMISSIONS_URL_TEMPLATE.format(cik=cik_10)
+        sub = _http_get_json(submissions_url, user_agent=user_agent, timeout_s=timeout_s)
+        recent = ((sub.get("filings") or {}).get("recent") or {}) if isinstance(sub, dict) else {}
+        forms = recent.get("form") if isinstance(recent, Mapping) else None
+        if not isinstance(forms, list):
+            continue
+
+        emitted = 0
+        for idx, form in enumerate(forms):
+            event_type = _classify_form_event_type(form)
+            if not event_type:
+                continue
+
+            accession = _clean_str(_recent_value(recent, "accessionNumber", idx))
+            filing_date = _recent_value(recent, "filingDate", idx)
+            primary_document = _clean_str(_recent_value(recent, "primaryDocument", idx))
+            if not accession or not filing_date:
+                continue
+
+            payload = {
+                "type": event_type,
+                "form_type": _clean_str(form),
+                "filing_accession": accession,
+                "filer_name": name,
+                "relationship": "institution" if event_type.startswith("institutional_") else "officer/director/10% owner",
+                "transaction_type": "purchase",
+                "shares": None,
+                "price_per_share": None,
+                "total_value": None,
+                "company": name,
+                "tickers": [t for t in raw_tickers if isinstance(t, str)],
+                "cik": cik_10,
+                "filing_url": _build_filing_url(cik_10, accession, primary_document),
+                "source_note": "Derived from SEC submissions feed; transaction detail parsing not yet enabled.",
+            }
+
+            yield {
+                "source_system": SOURCE_SYSTEM,
+                "source_event_id": f"sec_live_{accession}",
+                "event_time": filing_date,
+                "payload_json": payload,
+            }
+            emitted += 1
+            if emitted >= max_filings_per_company:
+                break
 
 
 def _build_source_event_id(
@@ -258,6 +426,46 @@ def ingest_fixture_to_db(path: str = "sample_data/sec_edgar/form4_events.jsonl")
     processed = 0
 
     for obj in iter_fixture_events(path):
+        processed += 1
+        payload = obj.get("payload_json") or {}
+        if not isinstance(payload, dict):
+            payload = {}
+        payload = _canonicalize_payload(payload)
+
+        event_time = _parse_dt(obj.get("event_time"))
+        source_event_id = _build_source_event_id(obj, payload, event_time)
+
+        raw_event = {
+            "source_system": SOURCE_SYSTEM,
+            "source_event_id": source_event_id,
+            "event_time": event_time,
+            "ingest_time": _now_utc(),
+            "payload_json": payload,
+            "content_hash": sha256_hex(json.dumps(payload, sort_keys=True, default=str)),
+            "canonical_doc_id": _build_canonical_doc_id(source_event_id, payload),
+        }
+        did_insert, _id = insert_raw_event(raw_event)
+        inserted += 1 if did_insert else 0
+
+    return inserted, processed
+
+
+def ingest_live_to_db(
+    *,
+    universe_path: str = "config/universe.yaml",
+    user_agent: str = DEFAULT_USER_AGENT,
+    max_filings_per_company: int = 20,
+    timeout_s: int = 20,
+) -> Tuple[int, int]:
+    inserted = 0
+    processed = 0
+
+    for obj in iter_live_events(
+        universe_path=universe_path,
+        user_agent=user_agent,
+        max_filings_per_company=max_filings_per_company,
+        timeout_s=timeout_s,
+    ):
         processed += 1
         payload = obj.get("payload_json") or {}
         if not isinstance(payload, dict):

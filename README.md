@@ -36,6 +36,21 @@ SMOKE_SKIP_DOCKER=1 DATABASE_URL="postgresql://user:pass@host:5432/dbname" make 
 ```
 
 
+## Useful CLI commands
+
+- Pipeline health snapshot:
+
+```bash
+DATABASE_URL="postgresql://ogree:ogree@localhost:5432/ogree" python -m ogree_alpha health --hours 72 --alert-hours 24
+```
+
+- Live SEC EDGAR pull (submissions feed):
+
+```bash
+DATABASE_URL="postgresql://ogree:ogree@localhost:5432/ogree" python -m ogree_alpha ingest-sec-live --max-filings-per-company 20 --user-agent "OGREE/0.1 (you@example.com)"
+```
+
+
 ## Notes / Known caveats
 
 - `insert_raw_event(...)` in `ogree_alpha/db/repo.py` assumes `raw_event["source_event_id"]` is **non-null** when handling the conflict/idempotency path.  

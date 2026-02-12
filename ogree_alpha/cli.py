@@ -96,6 +96,28 @@ def ingest_sec(
     typer.echo(f"SEC EDGAR: processed {processed}, inserted {inserted} new events")
 
 
+@app.command("ingest-sec-live")
+def ingest_sec_live(
+    max_filings_per_company: int = typer.Option(20, help="Max filings per company"),
+    user_agent: str = typer.Option(
+        "OGREE/0.1 (research@ogree.local)",
+        help="SEC-required User-Agent header",
+    ),
+    timeout_s: int = typer.Option(20, help="HTTP timeout in seconds"),
+    universe_path: str = typer.Option("config/universe.yaml", help="Path to universe YAML"),
+) -> None:
+    """Ingest recent SEC EDGAR filings from SEC submissions endpoints."""
+    from ogree_alpha.adapters.sec_edgar import ingest_live_to_db
+
+    inserted, processed = ingest_live_to_db(
+        universe_path=universe_path,
+        user_agent=user_agent,
+        max_filings_per_company=max_filings_per_company,
+        timeout_s=timeout_s,
+    )
+    typer.echo(f"SEC EDGAR live: processed {processed}, inserted {inserted} new events")
+
+
 @app.command("generate-alerts")
 def generate_alerts(
     hours: int = typer.Option(72, help="Lookback window in hours"),
@@ -138,6 +160,24 @@ def opportunities(
 
     opps = rank_opportunities(hours=hours, top_n=top_n)
     typer.echo(render_text(opps))
+
+
+@app.command("health")
+def health(
+    hours: int = typer.Option(72, help="Event window in hours"),
+    alert_hours: int = typer.Option(24, help="Alert window in hours"),
+    output: Optional[str] = typer.Option(None, help="Write health snapshot JSON to file"),
+) -> None:
+    """Compute and display pipeline health metrics."""
+    from ogree_alpha.observability import compute_health_snapshot, render_text
+
+    snapshot = compute_health_snapshot(hours=hours, alert_hours=alert_hours)
+    if output:
+        with open(output, "w", encoding="utf-8") as f:
+            json.dump(snapshot, f, indent=2)
+        typer.echo(f"Health snapshot written to {output}")
+    else:
+        typer.echo(render_text(snapshot))
 
 
 @app.command("run-all")
