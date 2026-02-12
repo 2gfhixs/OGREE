@@ -4,6 +4,11 @@ Exploration Alpha (Track A): event-driven research engine for oil/gas + REE/uran
 
 See `SPEC.md` for the full system specification.
 
+## Demo docs
+
+- `docs/DEMO_REPORT_SAMPLE.md` - sample report artifact for team demos
+- `docs/OGREE_TOOL_SUMMARY.md` - current feature/architecture summary
+
 
 ## Smoke test
 
