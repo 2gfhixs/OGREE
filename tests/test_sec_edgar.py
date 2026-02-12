@@ -9,6 +9,7 @@ import pytest
 from ogree_alpha.adapters.sec_edgar import (
     SEC_SUBMISSIONS_URL_TEMPLATE,
     SEC_TICKER_MAP_URL,
+    _load_ticker_to_cik_map,
     _classify_form_event_type,
     _canonicalize_payload,
     _derive_lineage_id,
@@ -224,11 +225,13 @@ def test_iter_live_events_from_mocked_submissions(monkeypatch):
     monkeypatch.setattr(sec_edgar, "_http_get_json", _fake_http_get_json)
     monkeypatch.setattr(sec_edgar, "_http_get_text", _fake_http_get_text)
 
+    stats = {}
     out = list(
         sec_edgar.iter_live_events(
             user_agent="OGREE Test (test@example.com)",
             max_filings_per_company=10,
             timeout_s=1,
+            stats=stats,
         )
     )
     assert len(out) == 4
@@ -238,6 +241,74 @@ def test_iter_live_events_from_mocked_submissions(monkeypatch):
     assert "insider_option_exercise" in types
     assert "institutional_13g" in types
     assert all(o.get("source_event_id", "").startswith("sec_live_") for o in out)
+    assert stats["form4_filings_seen"] == 1
+    assert stats["form4_filings_parsed"] == 1
+    assert stats["form4_filings_skipped"] == 0
+    assert stats["form4_transactions_emitted"] == 3
+    assert stats["institutional_events_emitted"] == 1
+
+
+def test_iter_live_events_tracks_skipped_form4(monkeypatch):
+    from ogree_alpha.adapters import sec_edgar
+
+    ticker_map = {
+        "0": {"cik_str": 1024, "ticker": "PR", "title": "Permian Resources Corporation"},
+    }
+    submissions = {
+        "filings": {
+            "recent": {
+                "form": ["4"],
+                "accessionNumber": ["0001024-26-000001"],
+                "filingDate": ["2026-02-01"],
+                "primaryDocument": ["doc1.xml"],
+            }
+        }
+    }
+
+    def _fake_http_get_json(url: str, *, user_agent: str, timeout_s: int = 20):
+        if url == SEC_TICKER_MAP_URL:
+            return ticker_map
+        if url == SEC_SUBMISSIONS_URL_TEMPLATE.format(cik="0000001024"):
+            return submissions
+        return {}
+
+    monkeypatch.setattr(sec_edgar, "_http_get_json", _fake_http_get_json)
+    monkeypatch.setattr(sec_edgar, "_http_get_text", lambda *args, **kwargs: "")
+
+    stats = {}
+    out = list(
+        sec_edgar.iter_live_events(
+            user_agent="OGREE Test (test@example.com)",
+            max_filings_per_company=5,
+            timeout_s=1,
+            stats=stats,
+        )
+    )
+    assert out == []
+    assert stats["form4_filings_seen"] == 1
+    assert stats["form4_filings_parsed"] == 0
+    assert stats["form4_filings_skipped"] == 1
+    assert stats["form4_transactions_emitted"] == 0
+
+
+def test_load_ticker_map_cached_per_run(monkeypatch):
+    from ogree_alpha.adapters import sec_edgar
+
+    calls = {"n": 0}
+
+    def _fake_http_get_json(url: str, *, user_agent: str, timeout_s: int = 20):
+        calls["n"] += 1
+        return {"0": {"cik_str": 1024, "ticker": "PR"}}
+
+    monkeypatch.setattr(sec_edgar, "_http_get_json", _fake_http_get_json)
+
+    cache = {}
+    m1 = _load_ticker_to_cik_map(user_agent="UA", timeout_s=1, run_cache=cache)
+    m2 = _load_ticker_to_cik_map(user_agent="UA", timeout_s=1, run_cache=cache)
+
+    assert m1 == {"PR": "0000001024"}
+    assert m2 == {"PR": "0000001024"}
+    assert calls["n"] == 1
 
 
 def test_parse_dt_formats():

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, Mapping, Tuple
+from typing import Any, Dict, Iterable, Mapping, MutableMapping, Tuple
 from urllib import request
 from urllib.error import HTTPError, URLError
 import xml.etree.ElementTree as ET
@@ -19,6 +20,11 @@ SOURCE_SYSTEM = "sec_edgar"
 SEC_TICKER_MAP_URL = "https://www.sec.gov/files/company_tickers.json"
 SEC_SUBMISSIONS_URL_TEMPLATE = "https://data.sec.gov/submissions/CIK{cik}.json"
 DEFAULT_USER_AGENT = "OGREE/0.1 (research@ogree.local)"
+DEFAULT_REQUEST_DELAY_S = 0.2
+DEFAULT_MAX_RETRIES = 3
+DEFAULT_BACKOFF_S = 1.0
+_RETRYABLE_HTTP_STATUS = {429, 500, 502, 503, 504}
+_LAST_HTTP_REQUEST_TS = 0.0
 
 VALID_TYPES = {
     "insider_buy",
@@ -178,6 +184,7 @@ def _normalize_ticker_symbol(value: Any) -> str | None:
 
 
 def _http_get_json(url: str, *, user_agent: str, timeout_s: int = 20) -> Dict[str, Any]:
+    global _LAST_HTTP_REQUEST_TS
     req = request.Request(
         url,
         headers={
@@ -185,15 +192,32 @@ def _http_get_json(url: str, *, user_agent: str, timeout_s: int = 20) -> Dict[st
             "Accept": "application/json",
         },
     )
-    try:
-        with request.urlopen(req, timeout=timeout_s) as resp:
-            data = resp.read().decode("utf-8")
-            return json.loads(data)
-    except (HTTPError, URLError, TimeoutError, json.JSONDecodeError):
-        return {}
+    for attempt in range(DEFAULT_MAX_RETRIES + 1):
+        now = time.monotonic()
+        elapsed = now - _LAST_HTTP_REQUEST_TS
+        if elapsed < DEFAULT_REQUEST_DELAY_S:
+            time.sleep(DEFAULT_REQUEST_DELAY_S - elapsed)
+        _LAST_HTTP_REQUEST_TS = time.monotonic()
+
+        try:
+            with request.urlopen(req, timeout=timeout_s) as resp:
+                data = resp.read().decode("utf-8")
+                return json.loads(data)
+        except HTTPError as e:
+            if e.code in _RETRYABLE_HTTP_STATUS and attempt < DEFAULT_MAX_RETRIES:
+                time.sleep(DEFAULT_BACKOFF_S * (2 ** attempt))
+                continue
+            return {}
+        except (URLError, TimeoutError, json.JSONDecodeError):
+            if attempt < DEFAULT_MAX_RETRIES:
+                time.sleep(DEFAULT_BACKOFF_S * (2 ** attempt))
+                continue
+            return {}
+    return {}
 
 
 def _http_get_text(url: str, *, user_agent: str, timeout_s: int = 20) -> str:
+    global _LAST_HTTP_REQUEST_TS
     req = request.Request(
         url,
         headers={
@@ -201,16 +225,32 @@ def _http_get_text(url: str, *, user_agent: str, timeout_s: int = 20) -> str:
             "Accept": "text/plain,application/xml,application/xhtml+xml,*/*",
         },
     )
-    try:
-        with request.urlopen(req, timeout=timeout_s) as resp:
-            raw = resp.read()
-            try:
-                encoding = resp.headers.get_content_charset() or "utf-8"
-                return raw.decode(encoding, errors="replace")
-            except Exception:
-                return raw.decode("utf-8", errors="replace")
-    except (HTTPError, URLError, TimeoutError):
-        return ""
+    for attempt in range(DEFAULT_MAX_RETRIES + 1):
+        now = time.monotonic()
+        elapsed = now - _LAST_HTTP_REQUEST_TS
+        if elapsed < DEFAULT_REQUEST_DELAY_S:
+            time.sleep(DEFAULT_REQUEST_DELAY_S - elapsed)
+        _LAST_HTTP_REQUEST_TS = time.monotonic()
+
+        try:
+            with request.urlopen(req, timeout=timeout_s) as resp:
+                raw = resp.read()
+                try:
+                    encoding = resp.headers.get_content_charset() or "utf-8"
+                    return raw.decode(encoding, errors="replace")
+                except Exception:
+                    return raw.decode("utf-8", errors="replace")
+        except HTTPError as e:
+            if e.code in _RETRYABLE_HTTP_STATUS and attempt < DEFAULT_MAX_RETRIES:
+                time.sleep(DEFAULT_BACKOFF_S * (2 ** attempt))
+                continue
+            return ""
+        except (URLError, TimeoutError):
+            if attempt < DEFAULT_MAX_RETRIES:
+                time.sleep(DEFAULT_BACKOFF_S * (2 ** attempt))
+                continue
+            return ""
+    return ""
 
 
 def _classify_form_event_type(form: Any) -> str | None:
@@ -226,7 +266,17 @@ def _classify_form_event_type(form: Any) -> str | None:
     return None
 
 
-def _load_ticker_to_cik_map(*, user_agent: str, timeout_s: int = 20) -> Dict[str, str]:
+def _load_ticker_to_cik_map(
+    *,
+    user_agent: str,
+    timeout_s: int = 20,
+    run_cache: MutableMapping[str, Any] | None = None,
+) -> Dict[str, str]:
+    if run_cache is not None and "ticker_to_cik" in run_cache:
+        cached = run_cache.get("ticker_to_cik")
+        if isinstance(cached, dict):
+            return dict(cached)
+
     payload = _http_get_json(SEC_TICKER_MAP_URL, user_agent=user_agent, timeout_s=timeout_s)
     rows: Iterable[Any]
     if isinstance(payload, dict):
@@ -244,6 +294,8 @@ def _load_ticker_to_cik_map(*, user_agent: str, timeout_s: int = 20) -> Dict[str
         cik = row.get("cik_str")
         if ticker and cik is not None:
             out[ticker] = str(cik).strip().zfill(10)
+    if run_cache is not None:
+        run_cache["ticker_to_cik"] = dict(out)
     return out
 
 
@@ -449,8 +501,20 @@ def iter_live_events(
     user_agent: str = DEFAULT_USER_AGENT,
     max_filings_per_company: int = 20,
     timeout_s: int = 20,
+    stats: MutableMapping[str, int] | None = None,
 ) -> Iterable[Dict[str, Any]]:
-    ticker_to_cik = _load_ticker_to_cik_map(user_agent=user_agent, timeout_s=timeout_s)
+    if stats is not None:
+        stats.setdefault("form4_filings_seen", 0)
+        stats.setdefault("form4_filings_parsed", 0)
+        stats.setdefault("form4_filings_skipped", 0)
+        stats.setdefault("form4_transactions_emitted", 0)
+        stats.setdefault("institutional_events_emitted", 0)
+    run_cache: Dict[str, Any] = {}
+    ticker_to_cik = _load_ticker_to_cik_map(
+        user_agent=user_agent,
+        timeout_s=timeout_s,
+        run_cache=run_cache,
+    )
     if not ticker_to_cik:
         return
 
@@ -501,6 +565,8 @@ def iter_live_events(
             filing_url = _build_filing_url(cik_10, accession, primary_document)
 
             if event_type == "form4":
+                if stats is not None:
+                    stats["form4_filings_seen"] = stats.get("form4_filings_seen", 0) + 1
                 text = _http_get_text(filing_url, user_agent=user_agent, timeout_s=timeout_s) if filing_url else ""
                 tx_rows = parse_form4_transactions(text)
                 if not tx_rows:
@@ -510,10 +576,12 @@ def iter_live_events(
                             _http_get_text(txt_url, user_agent=user_agent, timeout_s=timeout_s)
                         )
 
+                tx_emitted = 0
                 for tx_idx, tx in enumerate(tx_rows):
                     tx_event_type = tx.get("event_type")
                     if tx_event_type not in VALID_TYPES:
                         continue
+                    tx_emitted += 1
                     payload = {
                         "type": tx_event_type,
                         "form_type": _clean_str(form),
@@ -542,6 +610,14 @@ def iter_live_events(
                         "event_time": tx.get("transaction_date") or filing_date,
                         "payload_json": payload,
                     }
+                if stats is not None:
+                    if tx_emitted > 0:
+                        stats["form4_filings_parsed"] = stats.get("form4_filings_parsed", 0) + 1
+                        stats["form4_transactions_emitted"] = (
+                            stats.get("form4_transactions_emitted", 0) + tx_emitted
+                        )
+                    else:
+                        stats["form4_filings_skipped"] = stats.get("form4_filings_skipped", 0) + 1
                 continue
 
             payload = {
@@ -565,6 +641,8 @@ def iter_live_events(
                 "event_time": filing_date,
                 "payload_json": payload,
             }
+            if stats is not None:
+                stats["institutional_events_emitted"] = stats.get("institutional_events_emitted", 0) + 1
 
 
 def _build_source_event_id(
@@ -656,14 +734,38 @@ def ingest_live_to_db(
     max_filings_per_company: int = 20,
     timeout_s: int = 20,
 ) -> Tuple[int, int]:
+    inserted, processed, _stats = ingest_live_to_db_with_stats(
+        universe_path=universe_path,
+        user_agent=user_agent,
+        max_filings_per_company=max_filings_per_company,
+        timeout_s=timeout_s,
+    )
+    return inserted, processed
+
+
+def ingest_live_to_db_with_stats(
+    *,
+    universe_path: str = "config/universe.yaml",
+    user_agent: str = DEFAULT_USER_AGENT,
+    max_filings_per_company: int = 20,
+    timeout_s: int = 20,
+) -> Tuple[int, int, Dict[str, int]]:
     inserted = 0
     processed = 0
+    stats: Dict[str, int] = {
+        "form4_filings_seen": 0,
+        "form4_filings_parsed": 0,
+        "form4_filings_skipped": 0,
+        "form4_transactions_emitted": 0,
+        "institutional_events_emitted": 0,
+    }
 
     for obj in iter_live_events(
         universe_path=universe_path,
         user_agent=user_agent,
         max_filings_per_company=max_filings_per_company,
         timeout_s=timeout_s,
+        stats=stats,
     ):
         processed += 1
         payload = obj.get("payload_json") or {}
@@ -686,4 +788,4 @@ def ingest_live_to_db(
         did_insert, _id = insert_raw_event(raw_event)
         inserted += 1 if did_insert else 0
 
-    return inserted, processed
+    return inserted, processed, stats

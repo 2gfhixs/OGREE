@@ -107,15 +107,23 @@ def ingest_sec_live(
     universe_path: str = typer.Option("config/universe.yaml", help="Path to universe YAML"),
 ) -> None:
     """Ingest recent SEC EDGAR filings from SEC submissions endpoints."""
-    from ogree_alpha.adapters.sec_edgar import ingest_live_to_db
+    from ogree_alpha.adapters.sec_edgar import ingest_live_to_db_with_stats
 
-    inserted, processed = ingest_live_to_db(
+    inserted, processed, stats = ingest_live_to_db_with_stats(
         universe_path=universe_path,
         user_agent=user_agent,
         max_filings_per_company=max_filings_per_company,
         timeout_s=timeout_s,
     )
     typer.echo(f"SEC EDGAR live: processed {processed}, inserted {inserted} new events")
+    typer.echo(
+        "  Form 4 filings: "
+        f"seen={stats.get('form4_filings_seen', 0)} "
+        f"parsed={stats.get('form4_filings_parsed', 0)} "
+        f"skipped={stats.get('form4_filings_skipped', 0)} "
+        f"tx_emitted={stats.get('form4_transactions_emitted', 0)}"
+    )
+    typer.echo(f"  Institutional events emitted: {stats.get('institutional_events_emitted', 0)}")
 
 
 @app.command("generate-alerts")
